@@ -20,7 +20,9 @@
   - [Работа с полями](#работа-с-полями)
   - [Работа с сущностями](#работа-с-сущностями)
   - [Работа с пользователями](#работа-с-пользователями)
+  - [Работа с очередями](#работа-с-очередями)
 - [API Модули](#-api-модули)
+- [Особенности и подводные камни](#-особенности-и-подводные-камни)
 - [Требования](#-требования)
 - [Лицензия](#-лицензия)
 - [Контакты](#-контакты)
@@ -430,6 +432,73 @@ user = await client.users.get('username')
 user = await client.users.get(123456)
 ```
 
+### Работа с очередями
+
+```python
+# Получение списка всех очередей
+queues = await client.queues.get()
+
+# Получение конкретной очереди
+queue = await client.queues.get('TREK', expand='all')
+
+# Создание очереди
+new_queue = await client.queues.create(
+    key='DESIGN',
+    name='Design Team',
+    lead='username',
+    default_type='task',
+    default_priority='normal',
+    issue_types_config=[
+        {
+            'issueType': 'task',
+            'workflow': 'oicn',
+            'resolutions': ['wontFix', 'fixed']
+        }
+    ],
+    description='Очередь команды дизайна'
+)
+
+# Удаление очереди
+await client.queues.delete('OLDQUEUE')
+
+# Восстановление удаленной очереди
+restored_queue = await client.queues.restore('OLDQUEUE')
+
+# Работа с версиями очереди
+versions = await client.queues.versions.get('TREK')
+
+# Создание версии
+version = await client.queues.versions.create(
+    queue='TREK',
+    name='v2.0.0',
+    description='Релиз версии 2.0',
+    start_date='2025-01-01',
+    due_date='2025-12-31'
+)
+
+# Получение полей очереди
+fields = await client.queues.fields.get('TREK')
+
+# Получение тегов очереди
+tags = await client.queues.tags.get('TREK')
+
+# Удаление тега
+await client.queues.tags.delete('TREK', 'deprecated')
+
+# Массовое управление доступом к очереди
+await client.queues.bulk.update(
+    queue_id='TREK',
+    create={'add': ['user1', 'user2']},
+    write={'remove': ['user3']}
+)
+
+# Получение прав доступа пользователя к очереди
+user_access = await client.queues.user.get('TREK', 'username')
+
+# Получение прав доступа группы к очереди
+group_access = await client.queues.group.get('TREK', 'group_id')
+```
+
 ## 🔧 API Модули
 
 Клиент состоит из следующих модулей:
@@ -479,6 +548,209 @@ user = await client.users.get(123456)
 ### UsersAPI (`client.users`)
 Работа с пользователями:
 - `get()` - получение списка всех пользователей или конкретного пользователя
+
+### QueuesAPI (`client.queues`)
+Управление очередями:
+- `get()` - получение очереди или списка очередей
+- `create()` - создание новой очереди
+- `delete()` - удаление очереди
+- `restore()` - восстановление удаленной очереди
+
+**Подмодули:**
+- `versions` - версии очередей (create, get)
+- `fields` - поля очередей (get)
+- `tags` - теги очередей (get, delete)
+- `bulk` - массовое управление доступом (update)
+- `user` - права доступа пользователя (get)
+- `group` - права доступа группы (get)
+
+## ⚠️ Особенности и подводные камни
+
+При работе с Yandex Tracker API есть ряд важных нюансов, которые необходимо учитывать для корректной работы.
+
+### 1. Пагинация при поиске сущностей
+
+**Проблема:** `entities.search()` возвращает пагинированный ответ в виде словаря, а не списка.
+
+**Структура ответа:**
+```python
+{
+    "hits": 125,      # Общее количество найденных сущностей
+    "pages": 3,       # Количество страниц
+    "values": [...]   # Массив сущностей на текущей странице (по умолчанию 50)
+}
+```
+
+**Решение:**
+```python
+# Получаем первую страницу
+projects_raw = await client.entities.search(
+    entity_type="project",
+    fields="summary,id"
+)
+
+# Проверяем тип ответа и загружаем все страницы
+if isinstance(projects_raw, dict):
+    pages = projects_raw.get("pages", 1)
+
+    if isinstance(pages, int) and pages > 1:
+        per_page = pages * 50
+        projects_raw = await client.entities.search(
+            entity_type="project",
+            fields="summary,id",
+            per_page=per_page
+        )
+
+    projects = projects_raw.get("values", [])
+else:
+    projects = projects_raw
+```
+
+### 2. Параметр fields при поиске
+
+**Проблема:** Без явного указания полей в параметре `fields`, API может не возвращать важные данные.
+
+**Неправильно:**
+```python
+projects = await client.entities.search(entity_type="project")
+# summary может отсутствовать в ответе
+```
+
+**Правильно:**
+```python
+projects = await client.entities.search(
+    entity_type="project",
+    fields="summary,id,description"
+)
+
+# Извлекаем данные
+for proj in projects["values"]:
+    summary = proj.get("fields", {}).get("summary", "")
+    if not summary:
+        summary = proj.get("summary", "")
+```
+
+### 3. Формат поля project при создании задачи
+
+**Проблема:** API ожидает `shortId` проекта (число), а не полный `id` (строка).
+
+**Неправильно:**
+```python
+project = {
+    "id": "68e5764ffa5085239cef5e94"  # ❌ Строковый ID
+}
+```
+
+**Правильно:**
+```python
+# После создания проекта
+new_project = await client.entities.create(
+    entity_type="project",
+    summary="Новый проект"
+)
+
+# Используйте shortId
+project_short_id = new_project.get("shortId")
+
+# Создаем задачу
+issue = await client.issues.create(
+    summary="Задача проекта",
+    queue="TESTBOT",
+    project={"primary": project_short_id}  # ✅ shortId как число
+)
+```
+
+### 4. Формат полей type и priority
+
+**Проблема:** API выдает ошибку 400, если передать полные объекты вместо ключей.
+
+**Неправильно:**
+```python
+issue = await client.issues.get("TESTBOT-1")
+
+new_issue = await client.issues.create(
+    summary="Копия",
+    queue="TESTBOT",
+    type=issue["type"],        # ❌ Полный объект
+    priority=issue["priority"]  # ❌ Полный объект
+)
+```
+
+**Правильно:**
+```python
+def extract_field_value(field_data):
+    """Извлечь значение поля для API запроса"""
+    if isinstance(field_data, dict):
+        return field_data.get("key") or field_data.get("id")
+    return field_data
+
+new_issue = await client.issues.create(
+    summary="Копия",
+    queue="TESTBOT",
+    type=extract_field_value(issue.get("type")),        # ✅ "milestone"
+    priority=extract_field_value(issue.get("priority"))  # ✅ "normal"
+)
+```
+
+### 5. Получение сущностей с полным набором полей
+
+**Проблема:** Без параметра `fields` API возвращает только базовые поля.
+
+**Неправильно:**
+```python
+project = await client.entities.get(
+    entity_id=project_id,
+    entity_type="project"
+)
+# НЕТ: description, lead, teamUsers, parentEntity
+```
+
+**Правильно:**
+```python
+project = await client.entities.get(
+    entity_id=project_id,
+    entity_type="project",
+    fields="summary,description,lead,teamUsers,teamAccess,parentEntity,clients,followers,start,end,tags"
+)
+# ✅ Все поля присутствуют
+```
+
+### 6. Ограничения на изменение системных полей
+
+**Нельзя изменить:**
+- ❌ `createdBy` - автор (устанавливается автоматически)
+- ❌ `createdAt` - дата создания
+- ❌ `author` - автор (алиас createdBy)
+
+**Можно изменить:**
+- ✅ `lead` - руководитель проекта
+- ✅ `assignee` - исполнитель задачи
+- ✅ `teamUsers` - участники
+- ✅ `followers` - наблюдатели
+
+```python
+# Правильное обновление
+await client.entities.update(
+    entity_id=project_id,
+    lead="user_login",
+    teamUsers=["user1", "user2"]
+)
+```
+
+### Дополнительные замечания
+
+**Автоконвертация параметров:** Библиотека автоматически конвертирует snake_case в camelCase:
+```python
+per_page=50  # → perPage=50 в API
+```
+
+**Обработка ошибок:** Используйте debug логирование для диагностики:
+```python
+import logging
+logging.getLogger("YaTrackerApi").setLevel(logging.DEBUG)
+```
+
+Полная документация: [context/gotchas.md](context/gotchas.md)
 
 ## 📋 Требования
 

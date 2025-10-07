@@ -84,6 +84,7 @@ class YandexTrackerClient:
         self._issues = None
         self._entities = None
         self._users = None
+        self._queues = None
     
     @property
     def issues(self):
@@ -108,6 +109,14 @@ class YandexTrackerClient:
             from .users import UsersAPI
             self._users = UsersAPI(self)
         return self._users
+
+    @property
+    def queues(self):
+        """Доступ к API модулю для работы с очередями"""
+        if self._queues is None:
+            from .queues import QueuesAPI
+            self._queues = QueuesAPI(self)
+        return self._queues
 
     async def __aenter__(self):
         """Async context manager entry"""
