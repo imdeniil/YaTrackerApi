@@ -1,5 +1,5 @@
 import asyncio
-from client import YandexTrackerClient
+from YaTrackerApi import YandexTrackerClient
 from env import TRACKER_API_KEY, TRACKER_ORG_ID
 
 async def main():
