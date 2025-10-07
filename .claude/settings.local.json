@@ -5,7 +5,11 @@
       "Bash(uv sync:*)",
       "Bash(uv build:*)",
       "Read(//c/Users/defaultuser0.DESKTOP-JVJ7AUP/**)",
-      "Bash(uv publish:*)"
+      "Bash(uv publish:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
