@@ -39,7 +39,7 @@ class EntitiesAPI(BaseAPI):
         entity_type: EntityType,
         summary: str,
         lead: Optional[str] = None,
-        access: Optional[bool] = None,
+        team_access: Optional[bool] = None,
         description: Optional[str] = None,
         markup_type: Optional[str] = None,
         author: Optional[str] = None,
@@ -63,7 +63,7 @@ class EntitiesAPI(BaseAPI):
                                     - "goal" - цель
             summary (str): Название сущности (обязательное поле)
             lead (Optional[str]): Ответственный (идентификатор пользователя)
-            access (Optional[bool]): Настройки доступа
+            team_access (Optional[bool]): Настройки доступа
                                    - True: доступ только для участников проекта/портфеля/цели
                                    - False: доступ имеют другие пользователи
             description (Optional[str]): Описание сущности
@@ -109,7 +109,7 @@ class EntitiesAPI(BaseAPI):
                 start="2025-01-01T00:00:00.000+0300",
                 end="2025-12-31T23:59:59.000+0300",
                 tags=["strategic", "2025"],
-                access=True
+                team_access=True
             )
 
             # Создание цели с родительской сущностью и связями
@@ -137,8 +137,8 @@ class EntitiesAPI(BaseAPI):
         if lead is not None and (not isinstance(lead, str) or not lead.strip()):
             raise ValueError("lead должен быть непустой строкой")
 
-        if access is not None and not isinstance(access, bool):
-            raise ValueError("access должен быть boolean")
+        if team_access is not None and not isinstance(team_access, bool):
+            raise ValueError("team_access должен быть boolean")
 
         if markup_type is not None and not isinstance(markup_type, str):
             raise ValueError("markup_type должен быть строкой")
@@ -179,8 +179,8 @@ class EntitiesAPI(BaseAPI):
         if lead is not None:
             fields["lead"] = lead
 
-        if access is not None:
-            fields["access"] = access
+        if team_access is not None:
+            fields["teamAccess"] = team_access
 
         if description is not None:
             fields["description"] = description
