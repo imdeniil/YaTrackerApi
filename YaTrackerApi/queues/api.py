@@ -20,9 +20,7 @@ class QueuesAPI(BaseAPI):
         self._versions = None
         self._fields = None
         self._tags = None
-        self._bulk = None
-        self._user = None
-        self._group = None
+        self._permissions = None
 
     @property
     def versions(self):
@@ -49,105 +47,95 @@ class QueuesAPI(BaseAPI):
         return self._tags
 
     @property
-    def bulk(self):
-        """Доступ к API для массового управления доступом к очереди"""
-        if self._bulk is None:
-            from .bulk import BulkAPI
-            self._bulk = BulkAPI(self.client)
-        return self._bulk
+    def permissions(self):
+        """Доступ к API для управления правами доступа к очереди"""
+        if self._permissions is None:
+            from .permissions import PermissionsAPI
+            self._permissions = PermissionsAPI(self.client)
+        return self._permissions
 
-    @property
-    def user(self):
-        """Доступ к API для получения доступа пользователя к очереди"""
-        if self._user is None:
-            from .user import UserAPI
-            self._user = UserAPI(self.client)
-        return self._user
-
-    @property
-    def group(self):
-        """Доступ к API для получения доступа группы к очереди"""
-        if self._group is None:
-            from .group import GroupAPI
-            self._group = GroupAPI(self.client)
-        return self._group
-
-    async def get(
+    async def list(
         self,
-        queue_id: Optional[str] = None,
         expand: Optional[Union[str, List[str]]] = None,
         per_page: Optional[int] = None
-    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    ) -> List[Dict[str, Any]]:
         """
-        Получение информации об очереди или списке очередей
+        Получение списка всех очередей
 
         Args:
-            queue_id: Идентификатор или ключ очереди (например, 'TREK').
-                     Если не указан, возвращает список всех очередей.
             expand: Дополнительные поля для включения в ответ.
                    Может быть строкой или списком строк:
                    - 'projects' - проекты очереди
                    - 'components' - компоненты очереди
                    - 'versions' - версии очереди
                    - 'all' - все дополнительные поля
-                   Примеры:
-                   - expand='projects'
-                   - expand=['projects', 'components']
-            per_page: Количество очередей на странице (только для списка очередей, по умолчанию 50)
+            per_page: Количество очередей на странице (по умолчанию 50)
 
         Returns:
-            Dict с информацией об очереди или List[Dict] со списком очередей
-
-        Raises:
-            aiohttp.ClientResponseError: При ошибках HTTP запроса (404 если очередь не найдена)
+            List[Dict] со списком очередей
 
         Examples:
-            # Получение списка всех очередей
-            queues = await client.queues.get()
-
-            # Получение информации о конкретной очереди
-            queue = await client.queues.get('TREK')
-
-            # Получение с дополнительными полями
-            queue = await client.queues.get('TREK', expand='all')
+            queues = await client.queues.list()
+            queues = await client.queues.list(expand='all', per_page=100)
         """
-
-        # Подготавливаем параметры запроса
         params = {}
 
         if expand:
-            # Обрабатываем expand параметр
             if isinstance(expand, str):
                 params['expand'] = expand
             elif isinstance(expand, list):
                 params['expand'] = ','.join(expand)
-            else:
-                self.logger.warning(f"Неподдерживаемый тип для expand: {type(expand)}")
 
-        if per_page is not None and queue_id is None:
+        if per_page is not None:
             params['perPage'] = per_page
 
-        # Формируем endpoint
-        if queue_id:
-            endpoint = f"/queues/{queue_id}"
-            self.logger.debug(f"Получение очереди {queue_id} с параметрами: {params}")
-        else:
-            endpoint = "/queues/"
-            self.logger.debug(f"Получение списка очередей с параметрами: {params}")
+        endpoint = "/queues/"
+        self.logger.debug(f"Получение списка очередей с параметрами: {params}")
 
         try:
             result = await self._request(endpoint, method='GET', params=params if params else None)
-            if queue_id:
-                self.logger.info(f"Очередь {queue_id} успешно получена")
-            else:
-                self.logger.info(f"Список очередей успешно получен")
+            self.logger.info(f"Список очередей успешно получен")
             return result
-
         except Exception as e:
-            if queue_id:
-                self.logger.error(f"Ошибка при получении очереди {queue_id}: {e}")
-            else:
-                self.logger.error(f"Ошибка при получении списка очередей: {e}")
+            self.logger.error(f"Ошибка при получении списка очередей: {e}")
+            raise
+
+    async def get(
+        self,
+        queue_id: str,
+        expand: Optional[Union[str, List[str]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Получение информации о конкретной очереди
+
+        Args:
+            queue_id: Идентификатор или ключ очереди (например, 'TREK')
+            expand: Дополнительные поля для включения в ответ.
+
+        Returns:
+            Dict с информацией об очереди
+
+        Examples:
+            queue = await client.queues.get('TREK')
+            queue = await client.queues.get('TREK', expand='all')
+        """
+        params = {}
+
+        if expand:
+            if isinstance(expand, str):
+                params['expand'] = expand
+            elif isinstance(expand, list):
+                params['expand'] = ','.join(expand)
+
+        endpoint = f"/queues/{queue_id}"
+        self.logger.debug(f"Получение очереди {queue_id} с параметрами: {params}")
+
+        try:
+            result = await self._request(endpoint, method='GET', params=params if params else None)
+            self.logger.info(f"Очередь {queue_id} успешно получена")
+            return result
+        except Exception as e:
+            self.logger.error(f"Ошибка при получении очереди {queue_id}: {e}")
             raise
 
     async def create(

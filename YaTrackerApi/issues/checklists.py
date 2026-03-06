@@ -17,7 +17,7 @@ class ChecklistAPI(BaseAPI):
             self._item = ChecklistItemAPI(self.client)
         return self._item
 
-    async def get(self, issue_id: str) -> List[Dict[str, Any]]:
+    async def list(self, issue_id: str) -> List[Dict[str, Any]]:
         """
         Получение всех пунктов чеклиста задачи
 
@@ -356,7 +356,7 @@ class ChecklistAPI(BaseAPI):
 
         # Сначала получаем информацию о текущем чеклисте для логирования
         try:
-            current_checklist = await self.get(issue_id)
+            current_checklist = await self.list(issue_id)
             items_count = len(current_checklist)
         except Exception:
             items_count = 0  # Если не удается получить, продолжаем

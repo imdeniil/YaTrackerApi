@@ -9,7 +9,7 @@ from ..base import BaseAPI
 class TransitionsAPI(BaseAPI):
     """API для работы с переходами по жизненному циклу задач в Yandex Tracker"""
 
-    async def get(self, issue_id: str) -> List[Dict[str, Any]]:
+    async def list(self, issue_id: str) -> List[Dict[str, Any]]:
         """
         Получение доступных переходов для задачи
 

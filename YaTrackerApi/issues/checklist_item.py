@@ -121,103 +121,36 @@ class ChecklistItemAPI(BaseAPI):
             if 'date' not in deadline or 'deadlineType' not in deadline:
                 raise ValueError("deadline должен содержать поля 'date' и 'deadlineType'")
 
-        # Получаем текущий чеклист через родительский API
-        from . import ChecklistAPI
-        checklist_api = ChecklistAPI(self.client)
-        current_checklist = await checklist_api.get(issue_id)
-
-        # Находим обновляемый пункт
-        item_to_update = None
-        updated_checklist = []
-
-        for item in current_checklist:
-            if item['id'] == item_id:
-                item_to_update = item.copy()
-                # Обновляем поля
-                item_to_update['text'] = text
-
-                if checked is not None:
-                    item_to_update['checked'] = checked
-
-                # Обработка assignee
-                if assignee is not None:
-                    if isinstance(assignee, str):
-                        # Определяем логин или ID по содержимому
-                        if assignee.isdigit():
-                            item_to_update['assignee'] = assignee  # ID как строка
-                        else:
-                            item_to_update['assignee'] = assignee  # Логин как строка
-                    elif isinstance(assignee, int):
-                        item_to_update['assignee'] = str(assignee)  # ID как строка
-                    elif isinstance(assignee, dict):
-                        # Объект с логином или ID
-                        if 'login' in assignee:
-                            item_to_update['assignee'] = assignee['login']
-                        elif 'id' in assignee:
-                            item_to_update['assignee'] = str(assignee['id'])
-                        else:
-                            raise ValueError("assignee объект должен содержать 'login' или 'id'")
-                    else:
-                        raise ValueError("assignee должен быть строкой, числом или объектом")
-                elif assignee is None and 'assignee' in item_to_update:
-                    # Убираем исполнителя
-                    del item_to_update['assignee']
-
-                # Обработка deadline
-                if deadline is not None:
-                    item_to_update['deadline'] = deadline
-                elif deadline is None and 'deadline' in item_to_update:
-                    # Убираем дедлайн
-                    del item_to_update['deadline']
-
-                updated_checklist.append(item_to_update)
-            else:
-                # Добавляем остальные пункты без изменений
-                item_copy = item.copy()
-                # Убираем служебные поля, которые не нужны для обновления
-                for field in ['textHtml', 'checklistItemType']:
-                    if field in item_copy:
-                        del item_copy[field]
-                updated_checklist.append(item_copy)
-
-        if item_to_update is None:
-            raise ValueError(f"Пункт чеклиста с ID '{item_id}' не найден")
-
         endpoint = f"/issues/{issue_id}/checklistItems/{item_id}"
 
-        self.logger.info(f"Обновление пункта {item_id} чеклиста для задачи: {issue_id}")
-        self.logger.debug(f"Новый текст: {text}")
+        payload = {'text': text}
 
         if checked is not None:
-            status = "выполнен" if checked else "не выполнен"
-            self.logger.debug(f"Новый статус: {status}")
+            payload['checked'] = checked
 
         if assignee is not None:
-            self.logger.debug(f"Новый исполнитель: {assignee}")
-        elif assignee is None:
-            self.logger.debug("Исполнитель убран")
+            if isinstance(assignee, str):
+                payload['assignee'] = assignee
+            elif isinstance(assignee, int):
+                payload['assignee'] = str(assignee)
+            elif isinstance(assignee, dict):
+                if 'login' in assignee:
+                    payload['assignee'] = assignee['login']
+                elif 'id' in assignee:
+                    payload['assignee'] = str(assignee['id'])
+                else:
+                    raise ValueError("assignee объект должен содержать 'login' или 'id'")
+            else:
+                raise ValueError("assignee должен быть строкой, числом или объектом")
 
         if deadline is not None:
-            self.logger.debug(f"Новый дедлайн: {deadline['date']}")
-        elif deadline is None:
-            self.logger.debug("Дедлайн убран")
+            payload['deadline'] = deadline
+
+        self.logger.info(f"Обновление пункта {item_id} чеклиста для задачи: {issue_id}")
 
         try:
-            # API требует передать все пункты чеклиста
-            result = await self._request(endpoint, method='PUT', data=updated_checklist)
-
-            # Логируем успешное обновление
+            result = await self._request(endpoint, method='PATCH', data=payload)
             self.logger.info(f"Пункт {item_id} чеклиста успешно обновлен для задачи {issue_id}")
-
-            if isinstance(result, list):
-                updated_items_count = len(result)
-                self.logger.debug(f"Получен обновленный чеклист с {updated_items_count} пунктами")
-
-                # Находим и логируем обновленный пункт
-                updated_item = next((item for item in result if item['id'] == item_id), None)
-                if updated_item:
-                    self.logger.debug(f"Обновленный пункт: '{updated_item['text']}' (статус: {'выполнен' if updated_item.get('checked', False) else 'не выполнен'})")
-
             return result
 
         except Exception as e:
@@ -309,7 +242,7 @@ class ChecklistItemAPI(BaseAPI):
         # Получаем информацию о пункте для логирования (если возможно)
         item_text = "неизвестный"
         try:
-            from . import ChecklistAPI
+            from .checklists import ChecklistAPI
             checklist_api = ChecklistAPI(self.client)
             current_checklist = await checklist_api.get(issue_id)
             target_item = next((item for item in current_checklist if item['id'] == item_id), None)

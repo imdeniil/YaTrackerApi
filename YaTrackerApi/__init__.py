@@ -5,5 +5,33 @@ Yandex Tracker API Client
 """
 
 from .base import YandexTrackerClient
+from .exceptions import (
+    TrackerAPIError,
+    BadRequestError,
+    UnauthorizedError,
+    ForbiddenError,
+    NotFoundError,
+    ConflictError,
+    PreconditionFailedError,
+    UnprocessableEntityError,
+    LockedError,
+    PreconditionRequiredError,
+    TooManyRequestsError,
+    ServerError,
+)
 
-__all__ = ['YandexTrackerClient']
+__all__ = [
+    'YandexTrackerClient',
+    'TrackerAPIError',
+    'BadRequestError',
+    'UnauthorizedError',
+    'ForbiddenError',
+    'NotFoundError',
+    'ConflictError',
+    'PreconditionFailedError',
+    'UnprocessableEntityError',
+    'LockedError',
+    'PreconditionRequiredError',
+    'TooManyRequestsError',
+    'ServerError',
+]

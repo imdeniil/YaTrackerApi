@@ -72,7 +72,7 @@ class VersionsAPI(BaseAPI):
             self.logger.error(f"Ошибка при создании версии {name} в очереди {queue}: {e}")
             raise
 
-    async def get(self, queue_id: str) -> List[Dict[str, Any]]:
+    async def list(self, queue_id: str) -> List[Dict[str, Any]]:
         """
         Получение списка версий очереди
 

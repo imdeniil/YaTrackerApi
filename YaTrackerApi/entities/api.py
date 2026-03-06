@@ -34,6 +34,30 @@ class EntitiesAPI(BaseAPI):
             self._links = LinksAPI(self.client)
         return self._links
 
+    @property
+    def comments(self):
+        """API для работы с комментариями сущностей"""
+        if not hasattr(self, '_comments'):
+            from .comments import EntityCommentsAPI
+            self._comments = EntityCommentsAPI(self.client)
+        return self._comments
+
+    @property
+    def attachments(self):
+        """API для работы с файлами сущностей"""
+        if not hasattr(self, '_attachments'):
+            from .attachments import EntityAttachmentsAPI
+            self._attachments = EntityAttachmentsAPI(self.client)
+        return self._attachments
+
+    @property
+    def settings(self):
+        """API для работы с настройками доступа сущностей"""
+        if not hasattr(self, '_settings'):
+            from .settings import EntitySettingsAPI
+            self._settings = EntitySettingsAPI(self.client)
+        return self._settings
+
     async def create(
         self,
         entity_type: EntityType,
@@ -921,4 +945,97 @@ class EntitiesAPI(BaseAPI):
         events_count = len(result.get('events', []))
         self.logger.info(f"Получено {events_count} изменений для сущности {entity_type} '{entity_id}'")
 
+        return result
+
+    async def update_key_results(
+        self,
+        entity_id: str,
+        key_result_items: Any,
+        comment: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Изменить ключевые результаты цели.
+
+        Используется через PATCH /v3/entities/goal/<id>?fields=keyResultItems.
+
+        Args:
+            entity_id: Идентификатор цели
+            key_result_items: Ключевые результаты. Варианты:
+                - list: заменить все ключевые результаты
+                - {"add": {...}}: добавить один ключевой результат
+                - {"remove": {...}}: удалить один ключевой результат
+                - None: удалить все ключевые результаты
+                Объект ключевого результата:
+                    type (str): "value" или "binary" (обязательно)
+                    text (str): название (обязательно)
+                    assignee (str): исполнитель
+                    deadline (dict): {date, deadlineType}
+                    progress (dict): {start, end, current} — обязательно при type="value"
+                    achieved (bool): достигнут ли — для type="binary"
+
+        Returns:
+            Dict[str, Any]: Обновлённая цель с ключевыми результатами
+        """
+        if not isinstance(entity_id, str) or not entity_id.strip():
+            raise ValueError("entity_id должен быть непустой строкой")
+
+        self.logger.info(f"Обновление ключевых результатов цели: {entity_id}")
+
+        endpoint = f'/entities/goal/{entity_id}'
+        params = {'fields': 'keyResultItems'}
+
+        payload = {"fields": {"keyResultItems": key_result_items}}
+        if comment is not None:
+            payload["comment"] = comment
+
+        result = await self._request(endpoint, 'PATCH', data=payload, params=params)
+
+        self.logger.info(f"Ключевые результаты цели '{entity_id}' обновлены")
+        return result
+
+    async def update_metrics(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        metric_items: Any,
+        comment: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Изменить метрики сущности.
+
+        Используется через PATCH /v3/entities/<type>/<id>?fields=metricItems.
+
+        Args:
+            entity_type: Тип сущности (project, portfolio, goal)
+            entity_id: Идентификатор сущности
+            metric_items: Метрики. Варианты:
+                - list: заменить все метрики
+                - {"add": {...}}: добавить одну метрику
+                - {"remove": {...}}: удалить одну метрику
+                - None: удалить все метрики
+                Объект метрики:
+                    text (str): название (обязательно)
+                    url (str): ссылка на виджет (опционально)
+
+        Returns:
+            Dict[str, Any]: Обновлённая сущность с метриками
+        """
+        if not isinstance(entity_type, str) or entity_type not in ["project", "portfolio", "goal"]:
+            raise ValueError("entity_type должен быть одним из: project, portfolio, goal")
+
+        if not isinstance(entity_id, str) or not entity_id.strip():
+            raise ValueError("entity_id должен быть непустой строкой")
+
+        self.logger.info(f"Обновление метрик сущности {entity_type}: {entity_id}")
+
+        endpoint = f'/entities/{entity_type}/{entity_id}'
+        params = {'fields': 'metricItems'}
+
+        payload = {"fields": {"metricItems": metric_items}}
+        if comment is not None:
+            payload["comment"] = comment
+
+        result = await self._request(endpoint, 'PATCH', data=payload, params=params)
+
+        self.logger.info(f"Метрики сущности {entity_type} '{entity_id}' обновлены")
         return result

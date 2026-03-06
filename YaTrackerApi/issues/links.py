@@ -149,7 +149,7 @@ class LinksAPI(BaseAPI):
             self.logger.error(f"Ошибка при создании связи между {issue_id} и {linked_issue}: {e}")
             raise
 
-    async def get(self, issue_id: str) -> List[Dict[str, Any]]:
+    async def list(self, issue_id: str) -> List[Dict[str, Any]]:
         """
         Получение всех связей задачи
 

@@ -11,63 +11,59 @@ QueueIdType = Union[str, int]  # ID или ключ очереди
 class LocalFieldsAPI(BaseAPI):
     """API для работы с локальными полями задач в очередях"""
 
-    async def get(self, queue_id: QueueIdType, field_key: Optional[str] = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    async def list(self, queue_id: QueueIdType) -> List[Dict[str, Any]]:
         """
-        Получение локальных полей очереди или конкретного локального поля.
+        Получение всех локальных полей очереди.
 
         Args:
-            queue_id (QueueIdType): Идентификатор или ключ очереди
-            field_key (Optional[str]): Ключ локального поля.
-                                     Если не указан, возвращается список всех полей очереди.
-                                     Если указан, возвращается информация о конкретном поле.
+            queue_id: Идентификатор или ключ очереди
 
         Returns:
-            Union[List[Dict[str, Any]], Dict[str, Any]]:
-                - Список всех локальных полей очереди, если field_key не указан
-                - Информацию о конкретном локальном поле, если field_key указан
-
-        Raises:
-            ValueError: При некорректных параметрах
-            aiohttp.ClientResponseError: При ошибках HTTP запроса
-                - 404 если очередь или поле не найдено
+            List[Dict[str, Any]]: Список локальных полей очереди
 
         Examples:
-            # Получение всех локальных полей очереди
-            local_fields = await client.issues.fields.local.get("TESTQUEUE")
-
-            # Получение конкретного локального поля
-            field = await client.issues.fields.local.get("TESTQUEUE", "custom_priority_local")
-
-            # Получение по числовому ID очереди
-            local_fields = await client.issues.fields.local.get(123)
-            field = await client.issues.fields.local.get(123, "custom_field_key")
+            local_fields = await client.issues.fields.local.list("TESTQUEUE")
+            local_fields = await client.issues.fields.local.list(123)
         """
-        # Валидация параметров
         if not isinstance(queue_id, (str, int)):
             raise ValueError("queue_id должен быть строкой или числом")
 
-        if field_key is not None:
-            if not isinstance(field_key, str) or not field_key.strip():
-                raise ValueError("field_key должен быть непустой строкой")
+        self.logger.info(f"Получение всех локальных полей очереди: {queue_id}")
+        endpoint = f'/queues/{queue_id}/localFields'
 
-        if field_key is not None:
-            # Получение конкретного локального поля
-            self.logger.info(f"Получение локального поля '{field_key}' в очереди {queue_id}")
-            endpoint = f'/queues/{queue_id}/localFields/{field_key}'
+        result = await self._request(endpoint, 'GET')
+        self.logger.info(f"Получено локальных полей для очереди {queue_id}: {len(result)}")
 
-            result = await self._request(endpoint, 'GET')
-            self.logger.info(f"Локальное поле '{field_key}' получено")
+        return result
 
-            return result
-        else:
-            # Получение всех локальных полей очереди
-            self.logger.info(f"Получение всех локальных полей очереди: {queue_id}")
-            endpoint = f'/queues/{queue_id}/localFields'
+    async def get(self, queue_id: QueueIdType, field_key: str) -> Dict[str, Any]:
+        """
+        Получение конкретного локального поля очереди.
 
-            result = await self._request(endpoint, 'GET')
-            self.logger.info(f"Получено локальных полей для очереди {queue_id}: {len(result)}")
+        Args:
+            queue_id: Идентификатор или ключ очереди
+            field_key: Ключ локального поля
 
-            return result
+        Returns:
+            Dict[str, Any]: Информация о локальном поле
+
+        Examples:
+            field = await client.issues.fields.local.get("TESTQUEUE", "custom_priority_local")
+            field = await client.issues.fields.local.get(123, "custom_field_key")
+        """
+        if not isinstance(queue_id, (str, int)):
+            raise ValueError("queue_id должен быть строкой или числом")
+
+        if not isinstance(field_key, str) or not field_key.strip():
+            raise ValueError("field_key должен быть непустой строкой")
+
+        self.logger.info(f"Получение локального поля '{field_key}' в очереди {queue_id}")
+        endpoint = f'/queues/{queue_id}/localFields/{field_key}'
+
+        result = await self._request(endpoint, 'GET')
+        self.logger.info(f"Локальное поле '{field_key}' получено")
+
+        return result
 
     async def create(
         self,

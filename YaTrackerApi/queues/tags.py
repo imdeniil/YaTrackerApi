@@ -9,7 +9,7 @@ from ..base import BaseAPI
 class TagsAPI(BaseAPI):
     """API для работы с тегами очередей"""
 
-    async def get(self, queue_id: str) -> List[str]:
+    async def list(self, queue_id: str) -> List[str]:
         """
         Получение списка тегов очереди
 

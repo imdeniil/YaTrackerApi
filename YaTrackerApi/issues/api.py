@@ -36,6 +36,12 @@ class IssuesAPI(BaseAPI):
         self._checklists = None
         self._fields = None
         self._comments = None
+        self._attachments = None
+        self._bulk = None
+        self._types = None
+        self._statuses = None
+        self._resolutions = None
+        self._priorities = None
 
     @property
     def links(self) -> LinksAPI:
@@ -73,7 +79,54 @@ class IssuesAPI(BaseAPI):
             self._comments = CommentsAPI(self.client)
         return self._comments
 
-    
+    @property
+    def attachments(self):
+        """Доступ к API для работы с прикреплёнными файлами задач"""
+        if self._attachments is None:
+            from .attachments import AttachmentsAPI
+            self._attachments = AttachmentsAPI(self.client)
+        return self._attachments
+
+    @property
+    def bulk(self):
+        """Доступ к API для пакетных операций с задачами"""
+        if self._bulk is None:
+            from .bulk import BulkAPI
+            self._bulk = BulkAPI(self.client)
+        return self._bulk
+
+    @property
+    def types(self):
+        """Доступ к API для работы с типами задач"""
+        if self._types is None:
+            from ..issue_types.api import IssueTypesAPI
+            self._types = IssueTypesAPI(self.client)
+        return self._types
+
+    @property
+    def statuses(self):
+        """Доступ к API для работы со статусами задач"""
+        if self._statuses is None:
+            from ..issue_types.api import StatusesAPI
+            self._statuses = StatusesAPI(self.client)
+        return self._statuses
+
+    @property
+    def resolutions(self):
+        """Доступ к API для работы с резолюциями"""
+        if self._resolutions is None:
+            from ..issue_types.api import ResolutionsAPI
+            self._resolutions = ResolutionsAPI(self.client)
+        return self._resolutions
+
+    @property
+    def priorities(self):
+        """Доступ к API для работы с приоритетами"""
+        if self._priorities is None:
+            from ..issue_types.api import PrioritiesAPI
+            self._priorities = PrioritiesAPI(self.client)
+        return self._priorities
+
     async def get(self, issue_id: str, expand: Optional[Union[str, List[str]]] = None) -> Dict[str, Any]:
         """
         Получение информации о задаче по ID или ключу
@@ -1100,81 +1153,6 @@ class IssuesAPI(BaseAPI):
             self.logger.error(f"Ошибка при очистке скролл-сессий: {e}")
             raise
 
-    async def priorities(self, localized: Optional[bool] = None) -> List[Dict[str, Any]]:
-        """
-        Получение списка доступных приоритетов задач
-
-        Args:
-            localized: Признак наличия переводов в ответе.
-                      True (по умолчанию) - только на языке пользователя
-                      False - на всех доступных языках
-
-        Returns:
-            List[Dict]: Список приоритетов с их свойствами:
-            - id: уникальный идентификатор приоритета
-            - key: строковый ключ приоритета (critical, major, minor и т.д.)
-            - display: отображаемое название приоритета
-            - order: порядок сортировки приоритетов
-
-        Raises:
-            aiohttp.ClientResponseError: При ошибках HTTP запроса
-
-        Examples:
-            # Получение приоритетов на языке пользователя
-            priorities = await client.issues.priorities()
-
-            # Получение приоритетов на всех языках
-            all_priorities = await client.issues.priorities(localized=False)
-
-            # Использование результатов
-            for priority in priorities:
-                print(f"Приоритет: {priority['display']} (ключ: {priority['key']})")
-
-            # Получение конкретного приоритета по ключу
-            major_priority = next(
-                (p for p in priorities if p['key'] == 'major'),
-                None
-            )
-        """
-
-        endpoint = "/priorities"
-        params = {}
-
-        # Добавляем параметр localized если указан
-        if localized is not None:
-            if not isinstance(localized, bool):
-                raise ValueError("localized должен быть булевым значением")
-            params['localized'] = str(localized).lower()
-
-        self.logger.info(f"Получение списка приоритетов задач")
-        if localized is not None:
-            self.logger.debug(f"Параметр localized: {localized}")
-
-        try:
-            result = await self._request(endpoint, method='GET', params=params)
-
-            # Проверяем, что получили список
-            if not isinstance(result, list):
-                self.logger.warning(f"Неожиданный тип ответа: {type(result)}")
-                result = []
-
-            self.logger.info(f"Получено {len(result)} приоритетов")
-
-            # Логгируем краткую информацию о приоритетах
-            for priority in result[:5]:  # Первые 5 для избежания спама в логах
-                key = priority.get('key', 'N/A')
-                display = priority.get('display', 'N/A')
-                self.logger.debug(f"Приоритет: {display} (ключ: {key})")
-
-            if len(result) > 5:
-                self.logger.debug(f"... и еще {len(result) - 5} приоритетов")
-
-            return result
-
-        except Exception as e:
-            self.logger.error(f"Ошибка при получении списка приоритетов: {e}")
-            raise
-
     async def changelog(
         self,
         issue_id: str,
@@ -1365,7 +1343,277 @@ class IssuesAPI(BaseAPI):
             self.logger.error(f"Ошибка при получении истории изменений для задачи {issue_id}: {e}")
             raise
 
+    async def suggest(
+        self,
+        input: str,
+        queue: Optional[str] = None,
+        full: Optional[bool] = None,
+        fields: Optional[Union[str, List[str]]] = None,
+        expand: Optional[Union[str, List[str]]] = None,
+        embed: Optional[Union[str, List[str]]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Формирование подсказок (suggest) при поиске задач.
 
+        Возвращает список задач, в названии которых содержится указанный
+        фрагмент текста. В ответ попадут только те задачи, к которым у
+        пользователя есть доступ.
+
+        Args:
+            input (str): Фрагмент текста для поиска задач. Если между словами
+                        указан пробел, в выдачу также попадут результаты,
+                        в которых есть любой текст на месте пробела.
+            queue (Optional[str]): Ключ очереди, в которой будет выполнен поиск.
+            full (Optional[bool]): Вывести подробную информацию о каждой задаче.
+                                  Значение по умолчанию — False.
+                                  Обязательный параметр для включения fields, expand, embed.
+            fields (Optional[Union[str, List[str]]]): Поля задачи для включения в ответ.
+                                                     Например: "summary,status,assignee"
+                                                     или ["summary", "status", "assignee"].
+                                                     Требуется full=True.
+            expand (Optional[Union[str, List[str]]]): Дополнительная информация в ответе.
+                                                     Доступные значения: all, html, attachments,
+                                                     comments, links, localLinkRefs, aliases,
+                                                     transitions, permissions, sla, update_limits.
+                                                     Требуется full=True.
+            embed (Optional[Union[str, List[str]]]): Подробная информация о параметрах из expand.
+                                                    Доступные значения: attachments, comments,
+                                                    transitions, sla.
+                                                    Требуется full=True.
+
+        Returns:
+            List[Dict[str, Any]]: Список найденных задач
+
+        Raises:
+            ValueError: При некорректных параметрах
+            aiohttp.ClientResponseError: При ошибках HTTP запроса
+
+        Examples:
+            # Простой поиск по тексту
+            issues = await client.issues.suggest(input="исправить ошибки")
+
+            # Поиск в конкретной очереди
+            issues = await client.issues.suggest(
+                input="баг авторизации",
+                queue="TESTBOT"
+            )
+
+            # Поиск с подробной информацией
+            issues = await client.issues.suggest(
+                input="исправить ошибки",
+                full=True,
+                fields=["summary", "status", "assignee", "followers"]
+            )
+
+            # Поиск с расширенными полями
+            issues = await client.issues.suggest(
+                input="релиз",
+                full=True,
+                fields="summary,status",
+                expand="transitions",
+                embed="transitions"
+            )
+        """
+        # Валидация обязательных параметров
+        if not isinstance(input, str) or not input.strip():
+            raise ValueError("input должен быть непустой строкой")
+
+        if queue is not None and (not isinstance(queue, str) or not queue.strip()):
+            raise ValueError("queue должен быть непустой строкой")
+
+        if full is not None and not isinstance(full, bool):
+            raise ValueError("full должен быть boolean")
+
+        # Предупреждение: fields/expand/embed требуют full=True
+        if (fields is not None or expand is not None or embed is not None) and not full:
+            self.logger.warning("Параметры fields, expand, embed требуют full=True для работы")
+
+        self.logger.info(f"Формирование подсказок по запросу: '{input}'")
+
+        # Формирование параметров запроса
+        params = {'input': input}
+
+        if queue is not None:
+            params['queue'] = queue
+
+        if full is not None:
+            params['full'] = str(full).lower()
+
+        if fields is not None:
+            if isinstance(fields, list):
+                params['fields'] = ','.join(fields)
+            else:
+                params['fields'] = fields
+
+        if expand is not None:
+            if isinstance(expand, list):
+                params['expand'] = ','.join(expand)
+            else:
+                params['expand'] = expand
+
+        if embed is not None:
+            if isinstance(embed, list):
+                params['embed'] = ','.join(embed)
+            else:
+                params['embed'] = embed
+
+        self.logger.debug(f"Параметры suggest-запроса: {params}")
+
+        endpoint = '/issues/_suggest'
+
+        try:
+            result = await self._request(endpoint, method='GET', params=params)
+
+            issues_count = len(result) if isinstance(result, list) else 0
+            self.logger.info(f"Найдено {issues_count} задач по подсказке '{input}'")
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при формировании подсказок по запросу '{input}': {e}")
+            raise
+
+    async def report(
+        self,
+        summary: str,
+        format: str = 'xlsx',
+        query: Optional[str] = None,
+        filter: Optional[Dict[str, Any]] = None,
+        filter_id: Optional[int] = None,
+        sorts: Optional[List[Dict[str, Any]]] = None,
+        report_fields: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Создание отчета по задачам.
+
+        Формирует отчет (экспорт) по задачам в формате xlsx, xml или csv.
+        Для фильтрации задач можно использовать один из параметров: query, filter или filter_id.
+
+        Args:
+            summary (str): Название отчета
+            format (str): Формат выгрузки. Допустимые значения: "xlsx", "xml", "csv".
+                          По умолчанию "xlsx".
+            query (Optional[str]): Фильтр на языке запросов Yandex Tracker.
+                                  Например: 'Queue: SUPPORT "Sort by": Updated DESC'
+            filter (Optional[Dict[str, Any]]): Параметры фильтрации задач.
+                                              Можно указать название любого поля и значение.
+                                              Например: {"queue": "TESTBOT", "assignee": "empty()"}
+            filter_id (Optional[int]): Идентификатор сохраненного фильтра.
+            sorts (Optional[List[Dict[str, Any]]]): Массив объектов с параметрами сортировки.
+                                                   Каждый объект: {"orderBy": "field", "orderAsc": bool}
+            report_fields (Optional[List[str]]): Список полей задачи для включения в отчет.
+                                                Например: ["priority", "type", "key", "summary",
+                                                "assignee", "status", "updated"]
+
+        Returns:
+            Dict[str, Any]: Информация о созданном отчете
+
+        Raises:
+            ValueError: При некорректных параметрах
+            aiohttp.ClientResponseError: При ошибках HTTP запроса
+
+        Examples:
+            # Отчет с языком запросов
+            report = await client.issues.report(
+                summary="Выгрузка задач SUPPORT",
+                format="xlsx",
+                query='Queue: SUPPORT "Sort by": Updated DESC',
+                sorts=[{"orderBy": "updated", "orderAsc": False}],
+                report_fields=["priority", "type", "key", "summary", "assignee", "status", "updated"]
+            )
+
+            # Отчет с фильтром по полям
+            report = await client.issues.report(
+                summary="Задачи без исполнителя",
+                format="csv",
+                filter={"queue": "TREK", "assignee": "empty()"},
+                report_fields=["key", "summary", "status"]
+            )
+
+            # Отчет по сохраненному фильтру
+            report = await client.issues.report(
+                summary="Отчет по фильтру",
+                format="xml",
+                filter_id=12345
+            )
+        """
+        # Валидация обязательных параметров
+        if not isinstance(summary, str) or not summary.strip():
+            raise ValueError("summary должен быть непустой строкой")
+
+        valid_formats = ['xlsx', 'xml', 'csv']
+        if format not in valid_formats:
+            raise ValueError(f"format должен быть одним из: {', '.join(valid_formats)}")
+
+        # Проверяем, что указан только один из параметров фильтрации
+        filter_params = [p for p in [query, filter, filter_id] if p is not None]
+        if len(filter_params) > 1:
+            raise ValueError("Можно использовать только один из параметров: query, filter, filter_id")
+
+        if sorts is not None:
+            if not isinstance(sorts, list):
+                raise ValueError("sorts должен быть списком объектов")
+            for sort in sorts:
+                if not isinstance(sort, dict) or 'orderBy' not in sort:
+                    raise ValueError("Каждый объект в sorts должен содержать ключ 'orderBy'")
+
+        if report_fields is not None:
+            if not isinstance(report_fields, list):
+                raise ValueError("report_fields должен быть списком строк")
+
+        if filter_id is not None and not isinstance(filter_id, int):
+            raise ValueError("filter_id должен быть числом")
+
+        self.logger.info(f"Создание отчета '{summary}' в формате {format}")
+
+        # Формирование объекта filter для API
+        filter_obj = {}
+
+        if query is not None:
+            filter_obj['query'] = query
+
+        if filter is not None:
+            filter_obj['filter'] = filter
+
+        if filter_id is not None:
+            filter_obj['filterId'] = filter_id
+
+        if sorts is not None:
+            filter_obj['sorts'] = sorts
+
+        # Формирование объекта parameters
+        parameters = {
+            'type': 'issueFilterExport',
+            'format': format,
+            'filter': filter_obj
+        }
+
+        if report_fields is not None:
+            parameters['fields'] = report_fields
+
+        # Формирование payload
+        payload = {
+            'fields': {
+                'summary': summary,
+                'parameters': parameters
+            }
+        }
+
+        self.logger.debug(f"Параметры создания отчета: {payload}")
+
+        endpoint = '/entities/report/'
+
+        try:
+            result = await self._request(endpoint, method='POST', data=payload)
+
+            report_id = result.get('id', 'N/A')
+            self.logger.info(f"Отчет '{summary}' успешно создан с ID: {report_id}")
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при создании отчета '{summary}': {e}")
+            raise
 
     async def list(self, **kwargs) -> List[Dict[str, Any]]:
         """

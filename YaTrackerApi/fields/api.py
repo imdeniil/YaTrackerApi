@@ -22,51 +22,47 @@ class FieldsAPI(BaseAPI):
             self._local = LocalFieldsAPI(self.client)
         return self._local
 
-    async def get(self, field_id: Optional[str] = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    async def list(self) -> List[Dict[str, Any]]:
         """
-        Получение информации о полях задач.
-
-        Args:
-            field_id (Optional[str]): Идентификатор конкретного поля.
-                                    Если не указан, возвращает все поля.
+        Получение списка всех полей задач.
 
         Returns:
-            Union[List[Dict[str, Any]], Dict[str, Any]]:
-                - Список всех полей, если field_id не указан
-                - Информацию об одном поле, если field_id указан
-
-        Raises:
-            ValueError: При некорректном field_id
-            aiohttp.ClientResponseError: При ошибках HTTP запроса (404 если поле не найдено)
+            List[Dict[str, Any]]: Список всех полей
 
         Examples:
-            # Получение всех полей
-            all_fields = await client.issues.fields.get()
+            all_fields = await client.issues.fields.list()
+        """
+        self.logger.info(f"Получение всех полей задач")
+        endpoint = '/fields'
 
-            # Получение конкретного поля
+        result = await self._request(endpoint, 'GET')
+        self.logger.info(f"Получено полей: {len(result)}")
+
+        return result
+
+    async def get(self, field_id: str) -> Dict[str, Any]:
+        """
+        Получение информации о конкретном поле задач.
+
+        Args:
+            field_id: Идентификатор поля
+
+        Returns:
+            Dict[str, Any]: Информация о поле
+
+        Examples:
             field = await client.issues.fields.get('custom_priority_field')
         """
-        if field_id is not None:
-            # Получение конкретного поля
-            if not isinstance(field_id, str) or not field_id.strip():
-                raise ValueError("field_id должен быть непустой строкой")
+        if not isinstance(field_id, str) or not field_id.strip():
+            raise ValueError("field_id должен быть непустой строкой")
 
-            self.logger.info(f"Получение поля: {field_id}")
-            endpoint = f'/fields/{field_id}'
+        self.logger.info(f"Получение поля: {field_id}")
+        endpoint = f'/fields/{field_id}'
 
-            result = await self._request(endpoint, 'GET')
-            self.logger.info(f"Поле '{field_id}' получено")
+        result = await self._request(endpoint, 'GET')
+        self.logger.info(f"Поле '{field_id}' получено")
 
-            return result
-        else:
-            # Получение всех полей
-            self.logger.info(f"Получение всех полей задач")
-            endpoint = '/fields'
-
-            result = await self._request(endpoint, 'GET')
-            self.logger.info(f"Получено полей: {len(result)}")
-
-            return result
+        return result
 
     async def create(
         self,
@@ -432,4 +428,59 @@ class FieldsAPI(BaseAPI):
 
         self.logger.info(f"Категория '{name['ru']}' успешно создана с ID: {result.get('id')}")
 
+        return result
+
+    async def update_category(
+        self,
+        category_id: str,
+        version: str,
+        name: Optional[FieldNameType] = None,
+        order: Optional[int] = None,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Изменение категории полей задач.
+
+        Args:
+            category_id: ID категории для обновления
+            version: Текущая версия категории (для оптимистичной блокировки)
+            name: Новое название категории на разных языках
+                  {"en": "English name", "ru": "Русское название"}
+            order: Новый вес поля при отображении в интерфейсе
+            description: Новое описание категории
+
+        Returns:
+            Dict: Информация об обновлённой категории
+
+        Raises:
+            ValueError: При некорректных параметрах
+            aiohttp.ClientResponseError: При ошибках HTTP запроса
+        """
+        if not isinstance(category_id, str) or not category_id.strip():
+            raise ValueError("category_id должен быть непустой строкой")
+
+        if not isinstance(version, str) or not version.strip():
+            raise ValueError("version должен быть непустой строкой")
+
+        update_params = [name, order, description]
+        if all(param is None for param in update_params):
+            raise ValueError("Необходимо указать хотя бы один параметр для обновления")
+
+        if name is not None:
+            if not isinstance(name, dict) or not name.get('en') or not name.get('ru'):
+                raise ValueError("name должен содержать ключи 'en' и 'ru' с непустыми значениями")
+
+        payload: Dict[str, Any] = {}
+        if name is not None:
+            payload['name'] = name
+        if order is not None:
+            payload['order'] = order
+        if description is not None:
+            payload['description'] = str(description)
+
+        endpoint = f'/fields/categories/{category_id}'
+        params = {'version': version}
+        result = await self._request(endpoint, 'PATCH', data=payload, params=params)
+
+        self.logger.info(f"Категория '{category_id}' успешно обновлена")
         return result

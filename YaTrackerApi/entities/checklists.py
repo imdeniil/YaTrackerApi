@@ -367,3 +367,51 @@ class EntityChecklistsAPI(BaseAPI):
         self.logger.info(f"Успешно обновлено {len(checklist_items)} пунктов чеклиста для сущности {entity_type} '{entity_id}'")
 
         return result
+
+    async def delete(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        notify: Optional[bool] = None,
+        notify_author: Optional[bool] = None,
+        fields: Optional[str] = None,
+        expand: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Удаление всего чеклиста сущности (проект, портфель).
+
+        Args:
+            entity_type: Тип сущности (project, portfolio)
+            entity_id: Идентификатор сущности
+            notify: Уведомлять пользователей
+            notify_author: Уведомлять автора изменений
+            fields: Дополнительные поля сущности в ответе
+            expand: Дополнительная информация (attachments)
+
+        Returns:
+            Dict[str, Any]: Информация о сущности после удаления чеклиста
+        """
+        if not isinstance(entity_type, str) or entity_type not in ["project", "portfolio"]:
+            raise ValueError("entity_type должен быть одним из: project, portfolio (удаление чеклиста недоступно для goal)")
+
+        if not isinstance(entity_id, str) or not entity_id.strip():
+            raise ValueError("entity_id должен быть непустой строкой")
+
+        self.logger.info(f"Удаление чеклиста сущности {entity_type}: {entity_id}")
+
+        endpoint = f'/entities/{entity_type}/{entity_id}/checklistItems'
+
+        params = {}
+        if notify is not None:
+            params['notify'] = 'true' if notify else 'false'
+        if notify_author is not None:
+            params['notifyAuthor'] = 'true' if notify_author else 'false'
+        if fields is not None:
+            params['fields'] = fields
+        if expand is not None:
+            params['expand'] = expand
+
+        result = await self._request(endpoint, 'DELETE', params=params or None)
+
+        self.logger.info(f"Чеклист успешно удалён для сущности {entity_type} '{entity_id}'")
+        return result

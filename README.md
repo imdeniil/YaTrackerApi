@@ -1,45 +1,11 @@
 # YaTrackerApi
 
-> Асинхронный Python клиент для работы с Yandex Tracker API с модульной архитектурой
+Асинхронный Python клиент для Yandex Tracker API с модульной архитектурой.
 
-[![PyPI version](https://badge.fury.io/py/YaTrackerApi.svg)](https://badge.fury.io/py/YaTrackerApi)
 [![Python](https://img.shields.io/pypi/pyversions/YaTrackerApi.svg)](https://pypi.org/project/YaTrackerApi/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 📋 Содержание
-
-- [Особенности](#-особенности)
-- [Установка](#-установка)
-- [Быстрый старт](#-быстрый-старт)
-- [Основные возможности](#-основные-возможности)
-  - [Работа с задачами](#работа-с-задачами)
-  - [Связи между задачами](#связи-между-задачами)
-  - [Управление статусами](#управление-статусами)
-  - [Чеклисты](#чеклисты)
-  - [Комментарии](#комментарии)
-  - [Работа с полями](#работа-с-полями)
-  - [Работа с сущностями](#работа-с-сущностями)
-  - [Работа с пользователями](#работа-с-пользователями)
-  - [Работа с очередями](#работа-с-очередями)
-- [API Модули](#-api-модули)
-- [Особенности и подводные камни](#-особенности-и-подводные-камни)
-- [Требования](#-требования)
-- [Лицензия](#-лицензия)
-- [Контакты](#-контакты)
-
-## ✨ Особенности
-
-- **Асинхронность** - полная поддержка `async/await` на базе `aiohttp`
-- **Модульная архитектура** - логическое разделение функциональности по модулям
-- **Lazy Loading** - модули загружаются только при первом обращении
-- **Типизация** - полная поддержка типов для всех методов
-- **Гибкость** - множественные форматы для одного поля (строки, числа, объекты)
-- **Валидация** - проверка данных на стороне клиента перед отправкой
-- **Логирование** - система логов на русском языке с настраиваемым уровнем
-- **Кастомные поля** - поддержка пользовательских полей любых типов
-- **Безопасность** - настроенный SSL/TLS контекст для всех соединений
-
-## 📦 Установка
+## Установка
 
 ```bash
 pip install YaTrackerApi
@@ -51,44 +17,42 @@ pip install YaTrackerApi
 uv add YaTrackerApi
 ```
 
-## 🚀 Быстрый старт
+## Быстрый старт
 
 ```python
 import asyncio
-from client import YandexTrackerClient
+from YaTrackerApi import YandexTrackerClient
 
 async def main():
     async with YandexTrackerClient(
         oauth_token="your_oauth_token",
-        org_id="your_org_id",
-        log_level="INFO"
+        org_id="your_org_id"
     ) as client:
         # Создание задачи
         issue = await client.issues.create(
             summary="Новая задача",
-            queue="TESTBOT",
-            description="Подробное описание задачи"
+            queue="DEV",
+            description="Описание задачи"
         )
-        print(f"Создана задача: {issue['key']}")
+        print(f"Создана: {issue['key']}")
 
-        # Получение задачи
-        issue = await client.issues.get('TESTBOT-1')
-        print(f"Задача: {issue['summary']}")
+        # Поиск задач
+        issues = await client.issues.search(
+            filter={"queue": "DEV", "assignee": "me()"},
+            per_page=50
+        )
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
 
-### Настройка переменных окружения
+### Переменные окружения
 
-Создайте файл `.env` в корне проекта:
+Создайте `.env` в корне проекта:
 
 ```env
 TRACKER_API_KEY=your_oauth_token
 TRACKER_ORG_ID=your_org_id
 ```
-
-И загрузите их:
 
 ```python
 from dotenv import load_dotenv
@@ -100,682 +64,776 @@ async with YandexTrackerClient(
     oauth_token=os.getenv("TRACKER_API_KEY"),
     org_id=os.getenv("TRACKER_ORG_ID")
 ) as client:
-    # ваш код
+    ...
 ```
 
-## 💡 Основные возможности
+## Структура API
 
-### Работа с задачами
+Все модули доступны через свойства клиента. Загружаются лениво — только при первом обращении.
 
-#### Создание задачи
+| Модуль | Доступ | Описание |
+|--------|--------|----------|
+| Задачи | `client.issues` | CRUD, поиск, подсчёт задач |
+| Сущности | `client.entities` | Проекты, портфели, цели |
+| Очереди | `client.queues` | Управление очередями |
+| Пользователи | `client.users` | Информация о пользователях |
+| Доски | `client.boards` | Доски, колонки, спринты |
+| Компоненты | `client.components` | Компоненты и права доступа |
+| Автоматизации | `client.automations` | Макросы, автодействия, триггеры |
+| Фильтры | `client.filters` | Сохранённые фильтры |
+| Дашборды | `client.dashboards` | Дашборды и виджеты |
+| Учёт времени | `client.worklog` | Записи о затраченном времени |
+| Импорт | `client.imports` | Импорт задач, комментариев, файлов |
+| Внешние связи | `client.external` | Внешние приложения и связи |
+
+## Задачи (`client.issues`)
+
+### CRUD
 
 ```python
-# Простое создание
+# Создать задачу
 issue = await client.issues.create(
     summary="Новая задача",
-    queue="TESTBOT"
-)
-
-# С полными параметрами
-issue = await client.issues.create(
-    summary="Задача с полными параметрами",
-    queue="TESTBOT",
-    description="Подробное описание",
+    queue="DEV",
+    description="Описание",
     assignee="username",
-    priority={"id": "2", "key": "minor"},
     type="bug",
+    priority="critical",
     tags=["backend", "urgent"]
 )
 
-# С кастомными полями
-issue = await client.issues.create(
-    summary="Задача с кастомными полями",
-    queue="TESTBOT",
-    localfields={
-        "numberOfEmployees": 10,
-        "contact_cl": "ООО Рога и Копыта",
-        "customPriority": "Очень высокий"
-    }
-)
-```
+# Получить задачу
+issue = await client.issues.get("DEV-123")
+issue = await client.issues.get("DEV-123", expand="transitions")
 
-#### Получение задачи
-
-```python
-# Базовое получение
-issue = await client.issues.get('TESTBOT-1')
-
-# С расширенными полями
-issue = await client.issues.get(
-    'TESTBOT-1',
-    expand=['transitions', 'attachments']
-)
-```
-
-#### Обновление задачи
-
-```python
-# Простое обновление
+# Обновить задачу
 await client.issues.update(
-    issue_id='TESTBOT-1',
-    summary="Обновленное название"
-)
-
-# Полное обновление
-await client.issues.update(
-    issue_id='TESTBOT-1',
+    "DEV-123",
     summary="Новое название",
-    description="Новое описание",
-    priority={"id": "1", "key": "critical"},
-    assignee="new_assignee",
+    priority="normal",
     tags={"add": ["new_tag"], "remove": ["old_tag"]}
 )
+
+# Переместить задачу
+await client.issues.move("DEV-123", queue="NEWQUEUE")
 ```
 
-#### Перенос задачи
-
-```python
-# Перенос в другую очередь
-issue = await client.issues.move(
-    issue_id='TESTBOT-1',
-    queue='NEWQUEUE',
-    move_all_fields=True,
-    initial_status=True
-)
-```
-
-#### Поиск задач
+### Поиск и подсчёт
 
 ```python
 # Поиск с фильтром
 issues = await client.issues.search(
-    filter={"queue": "TESTBOT", "assignee": "me()"},
-    order="+status",
-    expand=["transitions", "attachments"],
+    filter={"queue": "DEV", "status": "open"},
+    order="+created",
     per_page=50
 )
 
-# Поиск по текстовому запросу
+# Поиск по запросу
 issues = await client.issues.search(
-    query="Queue: TESTBOT AND Status: Open"
+    query="Queue: DEV AND Status: Open"
 )
+
+# Подсчёт
+count = await client.issues.count(filter={"queue": "DEV"})
 ```
 
-#### Подсчет задач
+### Комментарии (`client.issues.comments`)
 
 ```python
-count = await client.issues.count(
-    query="Queue: TESTBOT AND Status: New"
+comments = await client.issues.comments.list("DEV-123")
+
+comment = await client.issues.comments.create(
+    "DEV-123", text="Готово", summonees=["user1"]
 )
-print(f"Найдено задач: {count}")
+
+await client.issues.comments.update("DEV-123", comment_id, text="Обновлено")
+await client.issues.comments.delete("DEV-123", comment_id)
 ```
 
-#### Получение приоритетов
+### Вложения (`client.issues.attachments`)
 
 ```python
-# Все приоритеты
-priorities = await client.issues.priorities()
+attachments = await client.issues.attachments.list("DEV-123")
 
-# Локализованные приоритеты
-priorities = await client.issues.priorities(localized=True)
+att = await client.issues.attachments.attach(
+    "DEV-123", file_data=b"content", filename="report.txt"
+)
+
+data = await client.issues.attachments.download("DEV-123", att_id, "report.txt")
+
+await client.issues.attachments.delete("DEV-123", att_id)
 ```
 
-#### История изменений
+### Чеклисты (`client.issues.checklists`)
 
 ```python
-changelog = await client.issues.changelog('TESTBOT-1')
-for change in changelog:
-    print(f"{change['updatedAt']}: {change['updatedBy']['display']}")
-```
+checklist = await client.issues.checklists.list("DEV-123")
 
-### Связи между задачами
+await client.issues.checklists.create("DEV-123", text="Сделать ревью")
 
-```python
-# Получение связей
-links = await client.issues.links.get('TESTBOT-1')
-
-# Создание связи
-await client.issues.links.create(
-    issue_id='TESTBOT-1',
-    relationship='relates',
-    issue='TESTBOT-2'
-)
-
-# Удаление связи
-await client.issues.links.delete(
-    issue_id='TESTBOT-1',
-    link_id='12345'
-)
-```
-
-### Управление статусами
-
-```python
-# Получение доступных переходов
-transitions = await client.issues.transitions.get('TESTBOT-1')
-
-# Выполнение перехода
-await client.issues.transitions.update(
-    issue_id='TESTBOT-1',
-    transition_id='resolve'
-)
-```
-
-### Чеклисты
-
-```python
-# Получение чеклистов задачи
-checklists = await client.issues.checklists.get('TESTBOT-1')
-
-# Создание пункта чеклиста
-await client.issues.checklists.create(
-    issue_id='TESTBOT-1',
-    text='Выполнить задачу',
-    checked=False
-)
-
-# Создание с дедлайном
-await client.issues.checklists.create(
-    issue_id='TESTBOT-1',
-    text='Подготовить релиз',
-    checked=False,
-    deadline={
-        'date': '2025-12-31T23:59:59.000+0000',
-        'deadlineType': 'date'
-    }
-)
-
-# Обновление пункта чеклиста
+# Обновить/удалить пункт
 await client.issues.checklists.item.update(
-    issue_id='TESTBOT-1',
-    checklist_item_id='item123',
-    text='Обновленный текст',
-    checked=True
+    "DEV-123", item_id, text="Обновлено", checked=True
+)
+await client.issues.checklists.item.delete("DEV-123", item_id)
+
+# Удалить весь чеклист
+await client.issues.checklists.delete("DEV-123")
+```
+
+### Связи (`client.issues.links`)
+
+```python
+links = await client.issues.links.list("DEV-123")
+
+link = await client.issues.links.create("DEV-123", "relates", "DEV-456")
+
+await client.issues.links.delete("DEV-123", link_id)
+```
+
+### Переходы (`client.issues.transitions`)
+
+```python
+transitions = await client.issues.transitions.list("DEV-123")
+
+await client.issues.transitions.execute("DEV-123", "resolve")
+```
+
+### Массовые операции (`client.issues.bulk`)
+
+```python
+await client.issues.bulk.move(
+    issues=["DEV-1", "DEV-2"],
+    queue="NEWQUEUE"
 )
 
-# Удаление пункта
-await client.issues.checklists.item.delete(
-    issue_id='TESTBOT-1',
-    checklist_item_id='item123'
+await client.issues.bulk.update(
+    issues=["DEV-1", "DEV-2"],
+    priority="critical"
 )
 ```
 
-### Комментарии
+### Типы, статусы, резолюции, приоритеты
 
 ```python
-# Получение комментариев
-comments = await client.issues.comments.get('TESTBOT-1')
+types = await client.issues.types.list()
+await client.issues.types.create(key="myType", name={"ru": "Мой тип"})
 
-# Создание комментария
-await client.issues.comments.create(
-    issue_id='TESTBOT-1',
-    text='Работа завершена',
-    summonees=['user1', 'user2']
-)
+statuses = await client.issues.statuses.list()
+await client.issues.statuses.create(key="review", name={"ru": "Ревью"}, type="inProgress")
 
-# Обновление комментария
-await client.issues.comments.update(
-    issue_id='TESTBOT-1',
-    comment_id='123',
-    text='Обновленный комментарий'
-)
-
-# Удаление комментария
-await client.issues.comments.delete(
-    issue_id='TESTBOT-1',
-    comment_id='123'
-)
+resolutions = await client.issues.resolutions.list()
+priorities = await client.issues.priorities.list()
 ```
 
-### Работа с полями
+### Поля (`client.issues.fields`)
 
 ```python
-# Получение всех полей
-fields = await client.issues.fields.get()
+# Глобальные поля
+fields = await client.issues.fields.list()
+field = await client.issues.fields.get("summary")
 
-# Получение конкретного поля
-field = await client.issues.fields.get(field_id='customField1')
-
-# Создание кастомного поля
-await client.fields.create(
-    name="Приоритет проекта",
-    key="projectPriority",
-    category="0000000000000001",
+await client.issues.fields.create(
+    name={"ru": "Моё поле"},
+    id="myField",
+    category=category_id,
     type="ru.yandex.startrek.core.fields.StringFieldType"
 )
 
-# Обновление поля
-await client.fields.update(
-    field_id='customField1',
-    name="Новое название поля"
+# Категории полей
+category = await client.issues.fields.create_category(
+    name={"ru": "Моя категория"}, order=100
 )
 
-# Работа с локальными полями очереди
-local_fields = await client.fields.local.get(queue_id='TESTBOT')
-
-# Создание локального поля
-await client.fields.local.create(
-    queue_id='TESTBOT',
-    name="Локальное поле",
-    key="localField1"
-)
+# Локальные поля очереди
+local = await client.issues.fields.local.list("DEV")
+field = await client.issues.fields.local.get("DEV", field_key)
+await client.issues.fields.local.create(queue_id="DEV", name={"ru": "Поле"}, ...)
 ```
 
-### Работа с сущностями
+## Сущности (`client.entities`)
 
-Сущности в Yandex Tracker - это проекты, портфели и цели.
+Проекты, портфели, цели.
 
 ```python
-# Создание проекта
+# CRUD
 project = await client.entities.create(
     entity_type="project",
     summary="Новый проект",
-    lead="username"
+    description="Описание"
 )
 
-# Получение сущности
 entity = await client.entities.get(
-    entity_id="project123",
-    expand=["attachments"]
-)
-
-# Обновление сущности
-await client.entities.update(
-    entity_id="project123",
-    summary="Обновленное название проекта"
-)
-
-# Поиск сущностей
-entities = await client.entities.search(
     entity_type="project",
-    filter={"lead": "username"},
-    order="+createdAt"
+    entity_id=project_id,
+    fields="summary,description,lead"
 )
 
-# Удаление сущности
-await client.entities.delete(
-    entity_id="project123",
-    withBoard=True  # Удалить вместе с доской
+await client.entities.update(
+    entity_type="project",
+    entity_id=project_id,
+    summary="Обновлённый проект"
 )
+
+await client.entities.delete(entity_type="project", entity_id=project_id)
+
+# Поиск
+result = await client.entities.search(
+    entity_type="project", input="поисковый запрос", fields="summary"
+)
+
+# История изменений
+changelog = await client.entities.changelog(
+    entity_type="project", entity_id=project_id
+)
+```
+
+### Подмодули сущностей
+
+```python
+# Комментарии
+await client.entities.comments.create(entity_type, entity_id, text="...")
+comments = await client.entities.comments.list(entity_type, entity_id)
+
+# Чеклисты
+await client.entities.checklists.create(entity_type, entity_id, text="Пункт")
+await client.entities.checklists.item.update(entity_type, entity_id, item_id, checked=True)
+
+# Связи
+await client.entities.links.create(entity_type, entity_id, relationship="depends on", entity=other_id)
+links = await client.entities.links.get(entity_type, entity_id)
+
+# Вложения
+await client.entities.attachments.attach(entity_type, entity_id, file_id=temp_file_id)
+files = await client.entities.attachments.list(entity_type, entity_id)
 
 # Массовое обновление
 await client.entities.bulk.update(
-    entity_ids=["project1", "project2"],
-    status="active"
+    entity_type="project",
+    entity_ids=[id1, id2],
+    fields={"description": "Новое описание"}
 )
 
-# Работа со связями сущностей
-await client.entities.links.create(
-    entity_id="project1",
-    relationship="relates",
-    entity="project2"
+# Настройки доступа
+settings = await client.entities.settings.get(entity_type, entity_id)
+
+# Ключевые результаты (для целей)
+await client.entities.update_key_results(
+    entity_id=goal_id,
+    key_result_items={"add": {"type": "binary", "text": "Запустить MVP"}}
+)
+
+# Метрики
+await client.entities.update_metrics(
+    entity_type="project", entity_id=project_id,
+    metric_items={"add": {"text": "Метрика"}}
 )
 ```
 
-### Работа с пользователями
+## Очереди (`client.queues`)
 
 ```python
-# Получение списка всех пользователей
-users = await client.users.get()
+queues = await client.queues.list()
+queue = await client.queues.get("DEV", expand="all")
 
-# Анализ пользователей
-for user in users:
-    print(f"{user['display']} ({user['login']})")
-
-# Фильтрация активных
-active_users = [u for u in users if not u.get('dismissed', False)]
-
-# Получение конкретного пользователя по логину
-user = await client.users.get('username')
-
-# Получение пользователя по ID
-user = await client.users.get(123456)
-```
-
-### Работа с очередями
-
-```python
-# Получение списка всех очередей
-queues = await client.queues.get()
-
-# Получение конкретной очереди
-queue = await client.queues.get('TREK', expand='all')
-
-# Создание очереди
 new_queue = await client.queues.create(
-    key='DESIGN',
-    name='Design Team',
-    lead='username',
-    default_type='task',
-    default_priority='normal',
+    key="DESIGN",
+    name="Дизайн",
+    lead="user_id",
+    default_type="task",
+    default_priority="normal",
     issue_types_config=[
-        {
-            'issueType': 'task',
-            'workflow': 'oicn',
-            'resolutions': ['wontFix', 'fixed']
-        }
-    ],
-    description='Очередь команды дизайна'
+        {"issueType": "task", "workflow": "W4", "resolutions": ["wontFix"]}
+    ]
 )
 
-# Удаление очереди
-await client.queues.delete('OLDQUEUE')
+await client.queues.delete("DESIGN")
+await client.queues.restore("DESIGN")
 
-# Восстановление удаленной очереди
-restored_queue = await client.queues.restore('OLDQUEUE')
+# Версии
+versions = await client.queues.versions.list("DEV")
+await client.queues.versions.create(queue="DEV", name="v2.0")
 
-# Работа с версиями очереди
-versions = await client.queues.versions.get('TREK')
+# Поля и теги
+fields = await client.queues.fields.list("DEV")
+tags = await client.queues.tags.list("DEV")
+await client.queues.tags.delete("DEV", "old_tag")
 
-# Создание версии
-version = await client.queues.versions.create(
-    queue='TREK',
-    name='v2.0.0',
-    description='Релиз версии 2.0',
-    start_date='2025-01-01',
-    due_date='2025-12-31'
+# Права доступа
+perms = await client.queues.permissions.get_user("DEV", user_id)
+perms = await client.queues.permissions.get_group("DEV", group_id)
+```
+
+## Пользователи (`client.users`)
+
+```python
+myself = await client.users.get_myself()
+myself = await client.users.get_myself(expand="groups")
+
+user = await client.users.get(uid)
+user = await client.users.get("login")
+
+users = await client.users.list()
+users = await client.users.list(per_page=10, email="user@example.com")
+
+result = await client.users.get_paginated(per_page=10)
+```
+
+## Доски (`client.boards`)
+
+```python
+boards = await client.boards.list()
+boards = await client.boards.list_paginated(per_page=10)
+
+board = await client.boards.create(
+    name="Спринт-доска",
+    board_permissions_template="private",
+    columns=[
+        {"name": "Open", "statuses": ["open"]},
+        {"name": "In Progress", "statuses": ["inProgress"]},
+        {"name": "Done", "statuses": ["closed"]}
+    ]
 )
 
-# Получение полей очереди
-fields = await client.queues.fields.get('TREK')
+board = await client.boards.get(board_id)
+await client.boards.update(board_id, name="Новое имя")
+await client.boards.delete(board_id)
 
-# Получение тегов очереди
-tags = await client.queues.tags.get('TREK')
+# Колонки
+columns = await client.boards.columns.list(board_id)
+col = await client.boards.columns.create(board_id, name="Review", statuses=["needInfo"])
+await client.boards.columns.update(board_id, col_id, name="Code Review")
+await client.boards.columns.delete(board_id, col_id)
 
-# Удаление тега
-await client.queues.tags.delete('TREK', 'deprecated')
+# Спринты
+sprints = await client.boards.sprints.list(board_id)
+sprint = await client.boards.sprints.create(
+    name="Sprint 1", board_id=board_id,
+    start_date="2026-04-01", end_date="2026-04-14"
+)
+sprint = await client.boards.sprints.get(sprint_id)
+```
 
-# Массовое управление доступом к очереди
-await client.queues.bulk.update(
-    queue_id='TREK',
-    create={'add': ['user1', 'user2']},
-    write={'remove': ['user3']}
+## Компоненты (`client.components`)
+
+```python
+components = await client.components.list()
+
+comp = await client.components.create(
+    name="Фронтенд", queue="DEV", description="UI компонент"
 )
 
-# Получение прав доступа пользователя к очереди
-user_access = await client.queues.user.get('TREK', 'username')
+await client.components.update(comp_id, version=comp['version'], name="Новое имя")
 
-# Получение прав доступа группы к очереди
-group_access = await client.queues.group.get('TREK', 'group_id')
+# Права доступа
+perms = await client.components.permissions.get_user(comp_id, user_id)
+perms = await client.components.permissions.get_group(comp_id, group_id)
 ```
 
-## 🔧 API Модули
+## Автоматизации (`client.automations`)
 
-Клиент состоит из следующих модулей:
-
-### IssuesAPI (`client.issues`)
-Работа с задачами:
-- `get()` - получение задачи
-- `create()` - создание задачи
-- `update()` - обновление задачи
-- `move()` - перенос задачи между очередями
-- `search()` - поиск задач
-- `count()` - подсчет задач
-- `priorities()` - получение приоритетов
-- `changelog()` - история изменений
-
-**Подмодули:**
-- `links` - связи между задачами
-- `transitions` - переходы статусов
-- `checklists` - чеклисты задач
-- `comments` - комментарии
-- `fields` - поля задач
-
-### FieldsAPI (`client.fields`)
-Управление полями:
-- `get()` - получение списка полей
-- `create()` - создание кастомного поля
-- `update()` - обновление поля
-- `create_category()` - создание категории полей
-
-**Подмодуль:**
-- `local` - локальные поля очередей
-
-### EntitiesAPI (`client.entities`)
-Работа с сущностями (проекты, портфели, цели):
-- `get()` - получение сущности
-- `create()` - создание сущности
-- `update()` - обновление сущности
-- `delete()` - удаление сущности
-- `search()` - поиск сущностей
-- `changelog()` - история изменений
-
-**Подмодули:**
-- `checklists` - чеклисты сущностей
-- `bulk` - массовые операции
-- `links` - связи между сущностями
-
-### UsersAPI (`client.users`)
-Работа с пользователями:
-- `get()` - получение списка всех пользователей или конкретного пользователя
-
-### QueuesAPI (`client.queues`)
-Управление очередями:
-- `get()` - получение очереди или списка очередей
-- `create()` - создание новой очереди
-- `delete()` - удаление очереди
-- `restore()` - восстановление удаленной очереди
-
-**Подмодули:**
-- `versions` - версии очередей (create, get)
-- `fields` - поля очередей (get)
-- `tags` - теги очередей (get, delete)
-- `bulk` - массовое управление доступом (update)
-- `user` - права доступа пользователя (get)
-- `group` - права доступа группы (get)
-
-## ⚠️ Особенности и подводные камни
-
-При работе с Yandex Tracker API есть ряд важных нюансов, которые необходимо учитывать для корректной работы.
-
-### 1. Пагинация при поиске сущностей
-
-**Проблема:** `entities.search()` возвращает пагинированный ответ в виде словаря, а не списка.
-
-**Структура ответа:**
 ```python
-{
-    "hits": 125,      # Общее количество найденных сущностей
-    "pages": 3,       # Количество страниц
-    "values": [...]   # Массив сущностей на текущей странице (по умолчанию 50)
-}
-```
-
-**Решение:**
-```python
-# Получаем первую страницу
-projects_raw = await client.entities.search(
-    entity_type="project",
-    fields="summary,id"
+# Макросы
+macros = await client.automations.macros.list("DEV")
+macro = await client.automations.macros.create(
+    queue="DEV", name="Мой макрос", body="Комментарий от {{currentUser}}"
 )
+await client.automations.macros.update("DEV", macro_id, name="Новое имя")
+await client.automations.macros.delete("DEV", macro_id)
 
-# Проверяем тип ответа и загружаем все страницы
-if isinstance(projects_raw, dict):
-    pages = projects_raw.get("pages", 1)
-
-    if isinstance(pages, int) and pages > 1:
-        per_page = pages * 50
-        projects_raw = await client.entities.search(
-            entity_type="project",
-            fields="summary,id",
-            per_page=per_page
-        )
-
-    projects = projects_raw.get("values", [])
-else:
-    projects = projects_raw
-```
-
-### 2. Параметр fields при поиске
-
-**Проблема:** Без явного указания полей в параметре `fields`, API может не возвращать важные данные.
-
-**Неправильно:**
-```python
-projects = await client.entities.search(entity_type="project")
-# summary может отсутствовать в ответе
-```
-
-**Правильно:**
-```python
-projects = await client.entities.search(
-    entity_type="project",
-    fields="summary,id,description"
+# Автодействия
+autoaction = await client.automations.autoactions.create(
+    queue="DEV", name="Авто",
+    filter={"priority": ["critical"]},
+    actions=[{"type": "Transition", "status": {"key": "needInfo"}}],
+    active=False
 )
+logs = await client.automations.autoactions.get_logs("DEV", autoaction_id)
 
-# Извлекаем данные
-for proj in projects["values"]:
-    summary = proj.get("fields", {}).get("summary", "")
-    if not summary:
-        summary = proj.get("summary", "")
-```
-
-### 3. Формат поля project при создании задачи
-
-**Проблема:** API ожидает `shortId` проекта (число), а не полный `id` (строка).
-
-**Неправильно:**
-```python
-project = {
-    "id": "68e5764ffa5085239cef5e94"  # ❌ Строковый ID
-}
-```
-
-**Правильно:**
-```python
-# После создания проекта
-new_project = await client.entities.create(
-    entity_type="project",
-    summary="Новый проект"
-)
-
-# Используйте shortId
-project_short_id = new_project.get("shortId")
-
-# Создаем задачу
-issue = await client.issues.create(
-    summary="Задача проекта",
-    queue="TESTBOT",
-    project={"primary": project_short_id}  # ✅ shortId как число
+# Триггеры
+trigger = await client.automations.triggers.create(
+    queue="DEV", name="Триггер",
+    actions=[{"type": "CreateComment", "text": "Сработал!", "fromRobot": True}],
+    conditions=[{"type": "Event.create"}],
+    active=False
 )
 ```
 
-### 4. Формат полей type и priority
+## Фильтры (`client.filters`)
 
-**Проблема:** API выдает ошибку 400, если передать полные объекты вместо ключей.
-
-**Неправильно:**
 ```python
-issue = await client.issues.get("TESTBOT-1")
+f = await client.filters.create(
+    name="Мои задачи",
+    filter={"queue": "DEV", "assignee": "me()"}
+)
 
-new_issue = await client.issues.create(
-    summary="Копия",
-    queue="TESTBOT",
-    type=issue["type"],        # ❌ Полный объект
-    priority=issue["priority"]  # ❌ Полный объект
+f = await client.filters.get(filter_id)
+await client.filters.update(filter_id, name="Новое имя", query="Queue: DEV")
+await client.filters.delete(filter_id)
+```
+
+## Дашборды (`client.dashboards`)
+
+```python
+dashboard = await client.dashboards.create(name="Аналитика", layout="two-columns")
+
+widget = await client.dashboards.create_cycle_time_widget(
+    dashboard_id=dashboard['id'],
+    description="Cycle Time",
+    query="Queue: DEV",
+    from_statuses=[{"key": "open"}],
+    to_statuses=[{"key": "closed"}],
+    bucket={"unit": "weeks", "count": 1},
+    start="now()-3M",
+    end="now()"
 )
 ```
 
-**Правильно:**
-```python
-def extract_field_value(field_data):
-    """Извлечь значение поля для API запроса"""
-    if isinstance(field_data, dict):
-        return field_data.get("key") or field_data.get("id")
-    return field_data
+## Учёт времени (`client.worklog`)
 
-new_issue = await client.issues.create(
-    summary="Копия",
-    queue="TESTBOT",
-    type=extract_field_value(issue.get("type")),        # ✅ "milestone"
-    priority=extract_field_value(issue.get("priority"))  # ✅ "normal"
+```python
+entry = await client.worklog.create(
+    issue_id="DEV-123",
+    start="2026-03-01T10:00:00.000+0300",
+    duration="PT2H30M",
+    comment="Разработка"
+)
+
+worklogs = await client.worklog.list("DEV-123")
+
+found = await client.worklog.search(
+    created_by="user_id",
+    created_at_from="2026-03-01T00:00:00.000+0000"
+)
+
+await client.worklog.update("DEV-123", entry_id, duration="PT3H")
+await client.worklog.delete("DEV-123", entry_id)
+```
+
+## Импорт (`client.imports`)
+
+```python
+issue = await client.imports.issue(
+    queue="DEV",
+    summary="Импортированная задача",
+    created_at="2025-01-15T10:00:00.000+0300",
+    created_by="user_id"
+)
+
+await client.imports.comment(
+    issue_id=issue['key'],
+    text="Импортированный комментарий",
+    created_at="2025-01-15T10:00:00.000+0300",
+    created_by="user_id"
+)
+
+await client.imports.link(
+    issue_id=issue['key'],
+    relationship="relates",
+    issue="DEV-456",
+    created_at="2025-01-15T10:00:00.000+0300",
+    created_by="user_id"
+)
+
+await client.imports.file(
+    issue_id=issue['key'],
+    file_data=b"content",
+    filename="data.txt",
+    created_at="2025-01-15T10:00:00.000+0300",
+    created_by="user_id"
 )
 ```
 
-### 5. Получение сущностей с полным набором полей
+## Внешние связи (`client.external`)
 
-**Проблема:** Без параметра `fields` API возвращает только базовые поля.
-
-**Неправильно:**
 ```python
-project = await client.entities.get(
-    entity_id=project_id,
-    entity_type="project"
+apps = await client.external.links.get_applications()
+
+links = await client.external.links.list("DEV-123")
+
+link = await client.external.links.create(
+    issue_id="DEV-123",
+    relationship="RELATES",
+    key="EXT-001",
+    origin="com.gitlab"
 )
-# НЕТ: description, lead, teamUsers, parentEntity
+
+await client.external.links.delete("DEV-123", link_id)
 ```
 
-**Правильно:**
+## Обработка ошибок
+
+Все ошибки API наследуются от `TrackerAPIError`:
+
 ```python
-project = await client.entities.get(
-    entity_id=project_id,
-    entity_type="project",
-    fields="summary,description,lead,teamUsers,teamAccess,parentEntity,clients,followers,start,end,tags"
+from YaTrackerApi import (
+    TrackerAPIError,
+    NotFoundError,
+    BadRequestError,
+    ForbiddenError,
+    UnprocessableEntityError,
+    TooManyRequestsError,
 )
-# ✅ Все поля присутствуют
+
+try:
+    issue = await client.issues.get("NONEXISTENT-99999")
+except NotFoundError as e:
+    print(f"Не найдено: {e.status_code}")  # 404
+    print(f"URL: {e.url}")
+    print(f"Метод: {e.method}")
+    print(f"Ошибки: {e.error_messages}")
+except TrackerAPIError as e:
+    print(f"Ошибка API: {e.status_code}")
 ```
 
-### 6. Ограничения на изменение системных полей
+| Исключение | HTTP код | Описание |
+|------------|----------|----------|
+| `BadRequestError` | 400 | Неверные параметры |
+| `UnauthorizedError` | 401 | Не авторизован |
+| `ForbiddenError` | 403 | Недостаточно прав |
+| `NotFoundError` | 404 | Объект не найден |
+| `ConflictError` | 409 | Конфликт версий |
+| `UnprocessableEntityError` | 422 | Ошибка валидации |
+| `LockedError` | 423 | Объект заблокирован |
+| `TooManyRequestsError` | 429 | Лимит запросов |
+| `ServerError` | 5xx | Ошибка сервера |
 
-**Нельзя изменить:**
-- ❌ `createdBy` - автор (устанавливается автоматически)
-- ❌ `createdAt` - дата создания
-- ❌ `author` - автор (алиас createdBy)
+## Тесты
 
-**Можно изменить:**
-- ✅ `lead` - руководитель проекта
-- ✅ `assignee` - исполнитель задачи
-- ✅ `teamUsers` - участники
-- ✅ `followers` - наблюдатели
+Тесты — интеграционные, работают с реальным API. По умолчанию `pytest` их не запускает.
+
+```bash
+# Запуск всех интеграционных тестов
+uv run pytest -m integration -v
+
+# Только тесты задач
+uv run pytest tests/issues/ -m integration -v
+
+# Только конкретный тест
+uv run pytest tests/test_users.py -m integration -v
+```
+
+Для запуска нужны переменные `TRACKER_API_KEY` и `TRACKER_ORG_ID` в `.env`.
+
+## Особенности и подводные камни
+
+### Пагинация `entities.search()`
+
+Возвращает словарь `{"hits": N, "pages": N, "values": [...]}`, а не список:
 
 ```python
-# Правильное обновление
-await client.entities.update(
-    entity_id=project_id,
-    lead="user_login",
-    teamUsers=["user1", "user2"]
+result = await client.entities.search(entity_type="project", fields="summary")
+projects = result.get("values", [])
+total = result.get("hits", 0)
+```
+
+### Параметр `fields` для сущностей
+
+Без `fields` API возвращает только базовые данные. Такие поля как `description`, `lead`, `teamUsers`, `parentEntity` **не включаются** по умолчанию:
+
+```python
+# Неправильно — summary может отсутствовать
+entity = await client.entities.get(entity_type="project", entity_id=id)
+
+# Правильно — явно указываем нужные поля
+entity = await client.entities.get(
+    entity_type="project", entity_id=id,
+    fields="summary,description,lead,teamAccess"
 )
 ```
 
-### Дополнительные замечания
+При использовании `fields` данные находятся в подобъекте `fields`:
 
-**Автоконвертация параметров:** Библиотека автоматически конвертирует snake_case в camelCase:
 ```python
-per_page=50  # → perPage=50 в API
+summary = entity.get("fields", {}).get("summary", "")
 ```
 
-**Обработка ошибок:** Используйте debug логирование для диагностики:
+### Формат `type` и `priority` при создании задач
+
+API ожидает ключи (`key` или `id`), а не полные объекты:
+
+```python
+# Неправильно — полный объект
+await client.issues.create(queue="DEV", summary="...", type=issue["type"])
+
+# Правильно — только ключ
+await client.issues.create(queue="DEV", summary="...", type="bug")
+```
+
+### Формат поля `project` при создании задачи
+
+API ожидает `shortId` (число), а не полный строковый `id`:
+
+```python
+project = await client.entities.create(entity_type="project", summary="Проект")
+short_id = project.get("shortId")  # число, например 342
+
+# v3 API
+await client.issues.create(
+    queue="DEV", summary="Задача",
+    project={"primary": short_id}
+)
+```
+
+### Автоконвертация snake_case → camelCase
+
+Параметры автоматически конвертируются:
+
+```python
+per_page=50       # → perPage=50
+start_date="..."  # → startDate="..."
+```
+
+### Оптимистичная блокировка (`version`)
+
+Обновление полей, категорий и компонентов требует параметра `version`. Без него API возвращает **428 Precondition Required**:
+
+```python
+field = await client.issues.fields.get("myField")
+version = str(field.get("version", "1"))
+
+updated = await client.issues.fields.update(
+    field_id="myField", version=version,
+    name={"ru": "Новое имя"}
+)
+```
+
+Версия увеличивается при каждом обновлении. При конфликте — **409 Conflict**.
+
+### Неудаляемые сущности
+
+Через API **нельзя удалить**: задачи (только закрыть), глобальные/локальные поля (только скрыть через `hidden=True`), категории полей, очереди (только через веб-интерфейс).
+
+**Можно удалить**: комментарии, вложения, чеклисты, связи, сущности (проекты/портфели/цели).
+
+### Версии API: v2 и v3
+
+Большинство эндпоинтов используют v3, но фильтры работают на **v2**. Библиотека обрабатывает это автоматически — `FiltersAPI` подменяет `base_url` на `/v2`.
+
+### Перенос задач (`move`)
+
+`issues.move()` может вернуть **422**, если статус задачи не существует в целевой очереди. Используйте массовый перенос со сбросом статуса:
+
+```python
+await client.issues.bulk.move(
+    queue="TARGET", issues=["DEV-1"],
+    initial_status=True  # сбрасывает статус на начальный
+)
+```
+
+### Загрузка файлов
+
+При загрузке файлов библиотека автоматически создаёт отдельную HTTP сессию без `Content-Type: application/json`, чтобы aiohttp корректно установил `multipart/form-data`.
+
+Миниатюры (`download_thumbnail`) доступны **только для изображений** (.jpg, .png, .gif). Для других типов файлов вернётся 404.
+
+### Чеклисты
+
+- Редактирование пункта — только **PATCH** (не PUT)
+- Для сущностей: ответ `checklists.create()` **не содержит** ID пунктов. Нужен отдельный запрос:
+  ```python
+  entity = await client.entities.get(
+      entity_type="project", entity_id=pid, fields="checklistItems"
+  )
+  items = entity.get("fields", {}).get("checklistItems", [])
+  ```
+- Удаление всего чеклиста сущности работает **только для project и portfolio** (не для goal — удаляйте пункты по одному)
+
+### Файлы к сущностям: двухшаговый процесс
+
+В отличие от задач, для сущностей нужно сначала загрузить временный файл, затем прикрепить его:
+
+```python
+# Шаг 1: загрузка
+temp = await client.issues.attachments.upload_temp(
+    file_data=b"content", filename="report.txt"
+)
+
+# Шаг 2: прикрепление
+await client.entities.attachments.attach(
+    entity_type="project", entity_id=project_id,
+    file_id=str(temp["id"])
+)
+```
+
+### Ключевые результаты и метрики
+
+Управляются через PATCH основной сущности, отдельных CRUD-эндпоинтов нет. KR доступны **только для целей**, метрики — для всех типов сущностей.
+
+### Колонки доски: `If-Match` в кавычках
+
+Операции с колонками требуют заголовок `If-Match` со значением **в двойных кавычках** (`'"3"'`). Библиотека делает это автоматически.
+
+### Компоненты: кэш `get_all()`
+
+`GET /components` может не содержать только что созданный компонент. При обновлении сразу после создания **всегда передавайте `version` из ответа create**:
+
+```python
+comp = await client.components.create(name="New", queue="DEV")
+await client.components.update(
+    comp["id"], version=comp["version"], name="Updated"
+)
+```
+
+### Удаление тега из очереди
+
+`tags.delete()` вернёт **422**, если тег используется задачами. Сначала уберите тег со всех задач.
+
+### Создание очереди: валидный workflow
+
+В `issue_types_config` нужно указать существующий ID workflow (например `"W4"`). Получить валидные ID можно из существующей очереди:
+
+```python
+queue = await client.queues.get("DEV", expand="all")
+for config in queue.get("issueTypesConfig", []):
+    print(config.get("workflow", {}).get("id"))  # "W4"
+```
+
+### Создание доски
+
+Для создания используется эндпоинт `/liveBoards/` (не `/boards/`). Библиотека обрабатывает это автоматически через `client.boards.create()`.
+
+### Импорт: часовые пояса `createdAt`
+
+API конвертирует даты в UTC перед валидацией. `createdAt` импортируемых комментариев, связей и файлов должен попадать в интервал `[createdAt, updatedAt]` задачи **в UTC**. Используйте единый часовой пояс (рекомендуется `+0000`):
+
+```python
+TIMESTAMP = "2025-01-15T07:00:00.000+0000"
+
+issue = await client.imports.issue(
+    queue="DEV", summary="Test",
+    created_at=TIMESTAMP, created_by=user_id
+)
+await client.imports.comment(
+    issue_id=issue["key"], text="Comment",
+    created_at=TIMESTAMP, created_by=user_id
+)
+```
+
+Для связей `createdAt` должен попадать в интервал **обеих** связанных задач.
+
+### Системные поля
+
+`createdBy`, `createdAt`, `author` — **нельзя изменить** через API. Устанавливаются автоматически на основе OAuth-токена. При клонировании копируйте `lead`/`assignee`/`followers`, а не автора.
+
+### Debug-логирование
+
 ```python
 import logging
 logging.getLogger("YaTrackerApi").setLevel(logging.DEBUG)
 ```
 
-Полная документация: [context/gotchas.md](context/gotchas.md)
-
-## 📋 Требования
+## Требования
 
 - Python 3.9+
-- aiohttp >= 3.12.15
-- python-dotenv >= 1.1.1
+- aiohttp >= 3.12
+- python-dotenv >= 1.1
 
-## 📄 Лицензия
+## Лицензия
 
-Проект распространяется под лицензией [MIT](LICENSE).
+[MIT](LICENSE)
 
-## 👤 Контакты
-
-**Даниил**
+## Контакты
 
 - GitHub: [@imdeniil](https://github.com/imdeniil)
 - Email: keemor821@gmail.com
-
-## 🔗 Ссылки
-
-- [PyPI](https://pypi.org/project/YaTrackerApi/)
-- [GitHub Repository](https://github.com/imdeniil/YaTrackerApi)
-- [Issues](https://github.com/imdeniil/YaTrackerApi/issues)
-- [Официальная документация Yandex Tracker API](https://cloud.yandex.ru/docs/tracker/about-api)
-
----
-
-**Создано с ❤️ для упрощения работы с Yandex Tracker API**

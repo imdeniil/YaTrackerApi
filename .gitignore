@@ -11,3 +11,7 @@ wheels/
 
 # Environment variables
 .env
+.env.local
+
+# Claude Code
+.claude/

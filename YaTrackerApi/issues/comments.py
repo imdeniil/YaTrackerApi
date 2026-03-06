@@ -7,7 +7,7 @@ SummoneesType = Union[str, int, Dict[str, Union[str, int]]]  # Пользова�
 class CommentsAPI(BaseAPI):
     """API для работы с комментариями задач в Yandex Tracker"""
 
-    async def get(
+    async def list(
         self,
         issue_id: str,
         expand: Optional[str] = None

@@ -9,6 +9,7 @@ import logging
 import ssl
 from typing import Dict, Any, Optional, Union, List
 from abc import ABC
+from .exceptions import raise_for_status, TrackerAPIError
 
 class BaseAPI(ABC):
     """Базовый класс для всех API модулей"""
@@ -85,6 +86,14 @@ class YandexTrackerClient:
         self._entities = None
         self._users = None
         self._queues = None
+        self._filters = None
+        self._automations = None
+        self._boards = None
+        self._dashboards = None
+        self._components = None
+        self._worklog = None
+        self._imports = None
+        self._external = None
     
     @property
     def issues(self):
@@ -117,6 +126,70 @@ class YandexTrackerClient:
             from .queues import QueuesAPI
             self._queues = QueuesAPI(self)
         return self._queues
+
+    @property
+    def automations(self):
+        """Доступ к API модулю для работы с автоматизациями"""
+        if self._automations is None:
+            from .automations import AutomationsAPI
+            self._automations = AutomationsAPI(self)
+        return self._automations
+
+    @property
+    def external(self):
+        """Доступ к API модулю для работы с внешними интеграциями"""
+        if self._external is None:
+            from .external import ExternalAPI
+            self._external = ExternalAPI(self)
+        return self._external
+
+    @property
+    def imports(self):
+        """Доступ к API модулю для импорта данных"""
+        if self._imports is None:
+            from .imports import ImportsAPI
+            self._imports = ImportsAPI(self)
+        return self._imports
+
+    @property
+    def worklog(self):
+        """Доступ к API модулю для работы с учётом времени"""
+        if self._worklog is None:
+            from .worklog import WorklogAPI
+            self._worklog = WorklogAPI(self)
+        return self._worklog
+
+    @property
+    def components(self):
+        """Доступ к API модулю для работы с компонентами"""
+        if self._components is None:
+            from .components import ComponentsAPI
+            self._components = ComponentsAPI(self)
+        return self._components
+
+    @property
+    def dashboards(self):
+        """Доступ к API модулю для работы с дашбордами"""
+        if self._dashboards is None:
+            from .dashboards import DashboardsAPI
+            self._dashboards = DashboardsAPI(self)
+        return self._dashboards
+
+    @property
+    def boards(self):
+        """Доступ к API модулю для работы с досками задач"""
+        if self._boards is None:
+            from .boards import BoardsAPI
+            self._boards = BoardsAPI(self)
+        return self._boards
+
+    @property
+    def filters(self):
+        """Доступ к API модулю для работы с фильтрами"""
+        if self._filters is None:
+            from .filters import FiltersAPI
+            self._filters = FiltersAPI(self)
+        return self._filters
 
     async def __aenter__(self):
         """Async context manager entry"""
@@ -212,10 +285,10 @@ class YandexTrackerClient:
                 
                 if response.status >= 400:
                     self.logger.error(f"HTTP ошибка {response.status}: {response_text}")
-                    response.raise_for_status()
-                
+                    raise_for_status(response.status, response_text, url=url, method=method)
+
                 self.logger.info(f"Запрос к {endpoint} выполнен успешно")
-                
+
                 # Пытаемся распарсить JSON
                 try:
                     result = json.loads(response_text)
@@ -224,24 +297,76 @@ class YandexTrackerClient:
                 except json.JSONDecodeError:
                     self.logger.warning(f"Ответ не является валидным JSON: {response_text}")
                     return {"raw_response": response_text}
-                
+
+        except TrackerAPIError:
+            raise
         except aiohttp.ClientConnectionError as e:
             self.logger.error(f"Ошибка соединения: {e}")
-            raise
-        except aiohttp.ClientResponseError as e:
-            self.logger.error(f"HTTP ошибка {e.status}: {e.message}")
-            if response:
-                try:
-                    error_text = await response.text()
-                    self.logger.error(f"Текст ошибки: {error_text}")
-                except:
-                    self.logger.error("Не удалось прочитать текст ошибки")
             raise
         except asyncio.TimeoutError as e:
             self.logger.error(f"Ошибка тайм-аута: {e}")
             raise
         except Exception as e:
             self.logger.error(f"Ошибка запроса: {type(e).__name__}: {e}")
+            raise
+
+    async def request_binary(self, endpoint: str, method: str = 'GET',
+                            params: Optional[Dict] = None) -> bytes:
+        """
+        HTTP запрос с бинарным ответом (для скачивания файлов)
+        """
+        url = f"{self.base_url}{endpoint}"
+        self.logger.info(f"Выполнение {method} запроса (binary) к: {endpoint}")
+
+        try:
+            async with self.session.request(method=method, url=url, params=params) as response:
+                if response.status >= 400:
+                    error_text = await response.text()
+                    self.logger.error(f"HTTP ошибка {response.status}: {error_text}")
+                    raise_for_status(response.status, error_text, url=url, method=method)
+
+                data = await response.read()
+                self.logger.info(f"Получено {len(data)} байт из {endpoint}")
+                return data
+
+        except TrackerAPIError:
+            raise
+        except aiohttp.ClientConnectionError as e:
+            self.logger.error(f"Ошибка соединения: {e}")
+            raise
+
+    async def request_multipart(self, endpoint: str, file_data: bytes,
+                                filename: str, params: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        HTTP POST запрос с multipart/form-data (для загрузки файлов)
+        """
+        url = f"{self.base_url}{endpoint}"
+        self.logger.info(f"Загрузка файла '{filename}' ({len(file_data)} байт) к: {endpoint}")
+
+        form = aiohttp.FormData()
+        form.add_field('file', file_data, filename=filename)
+
+        # Создаём отдельный запрос без сессионного Content-Type,
+        # чтобы aiohttp сам выставил multipart/form-data с boundary
+        headers = {k: v for k, v in self.headers.items() if k.lower() != 'content-type'}
+
+        try:
+            connector = aiohttp.TCPConnector(ssl=True)
+            async with aiohttp.ClientSession(headers=headers, connector=connector) as upload_session:
+                async with upload_session.post(url, data=form, params=params) as response:
+                    if response.status >= 400:
+                        error_text = await response.text()
+                        self.logger.error(f"HTTP ошибка {response.status}: {error_text}")
+                        raise_for_status(response.status, error_text, url=url, method='POST')
+
+                    result = await response.json()
+                    self.logger.info(f"Файл '{filename}' успешно загружен")
+                    return result
+
+        except TrackerAPIError:
+            raise
+        except aiohttp.ClientConnectionError as e:
+            self.logger.error(f"Ошибка соединения: {e}")
             raise
 
     async def health_check(self) -> Dict[str, Any]:

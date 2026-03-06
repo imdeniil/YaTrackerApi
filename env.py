@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 
+load_dotenv('.env.local')
 load_dotenv()
 
 TRACKER_API_KEY = os.environ.get("TRACKER_API_KEY")

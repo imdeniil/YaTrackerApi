@@ -9,7 +9,7 @@ from ..base import BaseAPI
 class FieldsAPI(BaseAPI):
     """API для работы с полями очередей"""
 
-    async def get(self, queue_id: str) -> List[Dict[str, Any]]:
+    async def list(self, queue_id: str) -> List[Dict[str, Any]]:
         """
         Получение списка полей очереди
 

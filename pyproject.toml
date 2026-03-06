@@ -1,6 +1,6 @@
 [project]
 name = "YaTrackerApi"
-version = "2.1.3"
+version = "2.2.0"
 description = "Асинхронный Python клиент для работы с Yandex Tracker API с модульной архитектурой"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -52,3 +52,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["YaTrackerApi"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-m 'not integration'"
+markers = [
+    "integration: интеграционные тесты с реальным API Yandex Tracker",
+]
