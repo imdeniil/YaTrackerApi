@@ -283,20 +283,24 @@ class ChecklistAPI(BaseAPI):
         try:
             result = await self._request(endpoint, method='POST', data=payload)
 
-            # Логгируем успешное создание
-            created_id = result.get('id', 'N/A')
-            created_text = result.get('text', text)
+            # API возвращает полный объект задачи, а не отдельный пункт чеклиста.
+            checklist_items = result.get('checklistItems', [])
 
             self.logger.info(f"Пункт чеклиста успешно создан для задачи {issue_id}")
-            self.logger.debug(f"ID пункта: {created_id}, текст: '{created_text}'")
 
-            if 'assignee' in result:
-                assignee_name = result['assignee'].get('display', 'N/A')
-                self.logger.debug(f"Назначенный исполнитель: {assignee_name}")
+            if checklist_items:
+                created_item = checklist_items[-1]
+                created_id = created_item.get('id', 'N/A')
+                created_text = created_item.get('text', text)
+                self.logger.debug(f"ID пункта: {created_id}, текст: '{created_text}'")
 
-            if 'deadline' in result:
-                deadline_date = result['deadline'].get('date', 'N/A')
-                self.logger.debug(f"Установлен дедлайн: {deadline_date}")
+                if 'assignee' in created_item and isinstance(created_item['assignee'], dict):
+                    assignee_name = created_item['assignee'].get('display', 'N/A')
+                    self.logger.debug(f"Назначенный исполнитель: {assignee_name}")
+
+                if 'deadline' in created_item and isinstance(created_item['deadline'], dict):
+                    deadline_date = created_item['deadline'].get('date', 'N/A')
+                    self.logger.debug(f"Установлен дедлайн: {deadline_date}")
 
             return result
 
