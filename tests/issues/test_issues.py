@@ -98,6 +98,27 @@ async def test_issues_checklists(ctx):
     assert len(checklist) >= 2
 
 
+async def test_checklists_create_on_issue_with_deadline(ctx):
+    """Регрессия: checklists.create() падал на задачах с deadline (deadline — строка, не dict)."""
+    client = ctx.client
+    issue = await ctx.create_issue(
+        queue=TEST_QUEUE,
+        summary="Задача с дедлайном для чеклиста",
+        deadline="2026-12-31"
+    )
+    issue_key = issue['key']
+
+    result = await client.issues.checklists.create(issue_key, text="Пункт на задаче с дедлайном")
+    assert isinstance(result, dict)
+    assert 'checklistItems' in result
+
+    checklist = await client.issues.checklists.list(issue_key)
+    assert len(checklist) >= 1
+    assert checklist[-1]['text'] == "Пункт на задаче с дедлайном"
+
+    await client.issues.checklists.delete(issue_key)
+
+
 async def test_issues_links(ctx):
     client = ctx.client
     issue1 = await ctx.create_issue(queue=TEST_QUEUE, summary="Задача 1")
