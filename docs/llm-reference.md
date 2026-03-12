@@ -137,8 +137,14 @@ await client.issues.fields.list()
 await client.issues.fields.get(field_id)
 await client.issues.fields.create(name, id, category, type, options_provider=None, order=None, description=None, readonly=None, visible=None, hidden=None, container=None)
 await client.issues.fields.update(field_id, version, name=None, category=None, order=None, description=None, readonly=None, hidden=None, visible=None, options_provider=None)
-await client.issues.fields.create_category(name, order, description=None)
-await client.issues.fields.update_category(category_id, version, name=None, order=None, description=None)
+```
+
+### client.issues.fields.categories
+
+```python
+await client.issues.fields.categories.list()       # → [{id, name, self, version}, ...]
+await client.issues.fields.categories.create(name, order, description=None)
+await client.issues.fields.categories.update(category_id, version, name=None, order=None, description=None)
 ```
 
 ### client.issues.fields.local

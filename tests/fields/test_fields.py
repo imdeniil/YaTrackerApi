@@ -22,12 +22,23 @@ async def test_global_fields_get(ctx):
     assert field.get('id') == field_id
 
 
-async def test_field_categories(ctx):
+async def test_categories_list(ctx):
+    """Получение списка категорий полей с их ID."""
+    categories = await ctx.client.issues.fields.categories.list()
+    assert isinstance(categories, list)
+    assert len(categories) > 0
+    # Каждая категория должна содержать id и name
+    for cat in categories:
+        assert 'id' in cat, f"Категория без id: {cat}"
+        assert 'name' in cat, f"Категория без name: {cat}"
+
+
+async def test_categories_create_and_update(ctx):
     client = ctx.client
     suffix = str(int(time.time()))[-6:]
 
     # Создать категорию
-    category = await client.issues.fields.create_category(
+    category = await client.issues.fields.categories.create(
         name={"ru": f"Тестовая категория {suffix}", "en": f"Test Category {suffix}"},
         order=900
     )
@@ -36,7 +47,7 @@ async def test_field_categories(ctx):
 
     # Обновить категорию
     cat_version = str(category.get('version', '1'))
-    updated_cat = await client.issues.fields.update_category(
+    updated_cat = await client.issues.fields.categories.update(
         category_id=category_id,
         version=cat_version,
         name={"ru": f"Обновлённая категория {suffix}", "en": f"Updated Category {suffix}"}
@@ -49,7 +60,7 @@ async def test_create_global_field(ctx):
     suffix = str(int(time.time()))[-6:]
 
     # Сначала создаём категорию
-    category = await client.issues.fields.create_category(
+    category = await client.issues.fields.categories.create(
         name={"ru": f"Категория для поля {suffix}", "en": f"Field Category {suffix}"},
         order=901
     )
@@ -86,7 +97,7 @@ async def test_create_local_field(ctx):
     suffix = str(int(time.time()))[-6:]
 
     # Создаём категорию
-    category = await client.issues.fields.create_category(
+    category = await client.issues.fields.categories.create(
         name={"ru": f"Категория для лок. поля {suffix}", "en": f"Local Field Cat {suffix}"},
         order=902
     )
