@@ -241,8 +241,13 @@ await client.issues.fields.create(
 )
 
 # Категории полей
-category = await client.issues.fields.create_category(
-    name={"ru": "Моя категория"}, order=100
+categories = await client.issues.fields.categories.list()
+category = await client.issues.fields.categories.create(
+    name={"ru": "Моя категория", "en": "My Category"}, order=100
+)
+await client.issues.fields.categories.update(
+    category_id=category["id"], version=str(category["version"]),
+    name={"ru": "Новое имя", "en": "New Name"}
 )
 
 # Локальные поля очереди
