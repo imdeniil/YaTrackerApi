@@ -1,6 +1,6 @@
 [project]
 name = "YaTrackerApi"
-version = "2.2.1"
+version = "2.3.0"
 description = "Асинхронный Python клиент для работы с Yandex Tracker API с модульной архитектурой"
 readme = "README.md"
 requires-python = ">=3.9"
